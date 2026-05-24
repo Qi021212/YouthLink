@@ -1,5 +1,11 @@
 {
   "src": [
-    "pages/Index"
+    "pages/Index",
+    "features/auth/pages/SplashPage",
+    "features/auth/pages/LoginPage",
+    "features/student/pages/StudentHomePage",
+    "features/student/pages/BreathingPage",
+    "features/student/pages/AttentionPage",
+    "features/student/pages/RhythmPage"
   ]
 }
