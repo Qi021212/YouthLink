@@ -1,0 +1,276 @@
+[
+  {
+    "id": "q101",
+    "tags": ["ACADEMIC", "STRESS"],
+    "type": "SINGLE_CHOICE",
+    "title": "过去两周，你感到学业或科研压力的频率是？",
+    "options": [
+      { "id": "q101_A", "text": "几乎没有，游刃有余", "score": 5 },
+      { "id": "q101_B", "text": "偶尔有压力，能较快化解", "score": 4 },
+      { "id": "q101_C", "text": "一半时间觉得压力较大", "score": 3 },
+      { "id": "q101_D", "text": "经常感到不堪重负", "score": 1 }
+    ]
+  },
+  {
+    "id": "q102",
+    "tags": ["ACADEMIC", "PROCRASTINATION"],
+    "type": "SINGLE_CHOICE",
+    "title": "当你面对复杂的作业或项目时，你通常会？",
+    "options": [
+      { "id": "q102_A", "text": "立刻拆解任务并开始行动", "score": 5 },
+      { "id": "q102_B", "text": "稍微拖延，但能按时完成", "score": 4 },
+      { "id": "q102_C", "text": "拖到最后一刻，感到极度焦虑", "score": 2 },
+      { "id": "q102_D", "text": "完全不想面对，甚至想放弃", "score": 1 }
+    ]
+  },
+  {
+    "id": "q103",
+    "tags": ["ACADEMIC", "STRESS"],
+    "type": "SLIDER",
+    "title": "请评估你最近对当前专业的学习热情 (0分毫无兴趣 - 10分充满激情)"
+  },
+  {
+    "id": "q104",
+    "tags": ["ACADEMIC", "FOCUS"],
+    "type": "SINGLE_CHOICE",
+    "title": "在上课或自习时，你保持专注的能力如何？",
+    "options": [
+      { "id": "q104_A", "text": "很容易进入心流状态", "score": 5 },
+      { "id": "q104_B", "text": "需要稍微努力才能集中", "score": 4 },
+      { "id": "q104_C", "text": "经常走神，很容易被手机打断", "score": 2 },
+      { "id": "q104_D", "text": "完全无法专注", "score": 1 }
+    ]
+  },
+  {
+    "id": "q105",
+    "tags": ["ACADEMIC", "GOAL"],
+    "type": "TEXT",
+    "title": "关于学习，最近有什么让你觉得特别有成就感，或者特别挫败的事情？"
+  },
+  {
+    "id": "q201",
+    "tags": ["SLEEP", "ENERGY"],
+    "type": "SLIDER",
+    "title": "请评估你最近两周的睡眠质量 (0分极差 - 10分极佳)"
+  },
+  {
+    "id": "q202",
+    "tags": ["SLEEP", "ANXIETY"],
+    "type": "SINGLE_CHOICE",
+    "title": "过去两周，你是否经历过入睡困难（躺下30分钟后仍无法入睡）？",
+    "options": [
+      { "id": "q202_A", "text": "从未有过", "score": 5 },
+      { "id": "q202_B", "text": "偶尔1-2次", "score": 4 },
+      { "id": "q202_C", "text": "经常这样，脑子里想很多事", "score": 2 },
+      { "id": "q202_D", "text": "几乎每天都失眠", "score": 1 }
+    ]
+  },
+  {
+    "id": "q203",
+    "tags": ["ENERGY", "HEALTH"],
+    "type": "SINGLE_CHOICE",
+    "title": "早上醒来时，你通常感觉精力恢复得如何？",
+    "options": [
+      { "id": "q203_A", "text": "元气满满，精力充沛", "score": 5 },
+      { "id": "q203_B", "text": "一般般，需要一杯咖啡", "score": 3 },
+      { "id": "q203_C", "text": "感觉没睡醒，浑身疲惫", "score": 1 }
+    ]
+  },
+  {
+    "id": "q204",
+    "tags": ["SLEEP", "HABIT"],
+    "type": "SINGLE_CHOICE",
+    "title": "你通常在什么时间入睡？",
+    "options": [
+      { "id": "q204_A", "text": "晚上11点半前（规律作息）", "score": 5 },
+      { "id": "q204_B", "text": "晚上12点到1点之间", "score": 3 },
+      { "id": "q204_C", "text": "凌晨2点以后（经常熬夜）", "score": 1 }
+    ]
+  },
+  {
+    "id": "q205",
+    "tags": ["ENERGY", "RECOVERY"],
+    "type": "TEXT",
+    "title": "如果感到非常疲惫，你通常会做些什么来让自己快速“回血”？"
+  },
+  {
+    "id": "q301",
+    "tags": ["EMOTION", "DEPRESSION"],
+    "type": "SINGLE_CHOICE",
+    "title": "过去两周，你感到情绪低落、沮丧或绝望的频率是？",
+    "options": [
+      { "id": "q301_A", "text": "完全没有", "score": 5 },
+      { "id": "q301_B", "text": "有几天", "score": 4 },
+      { "id": "q301_C", "text": "一半以上的天数", "score": 2 },
+      { "id": "q301_D", "text": "几乎每天", "score": 1 }
+    ]
+  },
+  {
+    "id": "q302",
+    "tags": ["EMOTION", "ANXIETY"],
+    "type": "SINGLE_CHOICE",
+    "title": "你是否有过无缘无故感到心慌、焦虑或紧张的时刻？",
+    "options": [
+      { "id": "q302_A", "text": "从来没有", "score": 5 },
+      { "id": "q302_B", "text": "偶尔有一两次", "score": 4 },
+      { "id": "q302_C", "text": "经常出现这种情况", "score": 2 },
+      { "id": "q302_D", "text": "几乎每天都在焦虑中度过", "score": 1 }
+    ]
+  },
+  {
+    "id": "q303",
+    "tags": ["EMOTION", "STABILITY"],
+    "type": "SLIDER",
+    "title": "请为最近两周你的情绪稳定性打分 (0分像过山车 - 10分非常平稳)"
+  },
+  {
+    "id": "q304",
+    "tags": ["EMOTION", "RESILIENCE"],
+    "type": "SINGLE_CHOICE",
+    "title": "当遇到不开心的事情时，你的第一反应通常是？",
+    "options": [
+      { "id": "q304_A", "text": "找人倾诉，或者运动宣泄", "score": 5 },
+      { "id": "q304_B", "text": "自我消化，做些喜欢的事转移注意力", "score": 4 },
+      { "id": "q304_C", "text": "陷入精神内耗，反复回想", "score": 2 },
+      { "id": "q304_D", "text": "情绪失控，感到无法承受", "score": 1 }
+    ]
+  },
+  {
+    "id": "q305",
+    "tags": ["EMOTION", "AWARENESS"],
+    "type": "TEXT",
+    "title": "如果给最近的情绪状态选一个天气（如晴天、暴雨、多云等），你会选什么？为什么？"
+  },
+  {
+    "id": "q401",
+    "tags": ["SOCIAL", "RELATIONSHIP"],
+    "type": "SINGLE_CHOICE",
+    "title": "在与室友或同学的日常交流中，你感觉如何？",
+    "options": [
+      { "id": "q401_A", "text": "很顺畅，互动让我感到舒适", "score": 5 },
+      { "id": "q401_B", "text": "基本正常，偶尔有小摩擦", "score": 4 },
+      { "id": "q401_C", "text": "有些回避社交，不太想说话", "score": 2 },
+      { "id": "q401_D", "text": "经常发生冲突或感到被孤立", "score": 1 }
+    ]
+  },
+  {
+    "id": "q402",
+    "tags": ["SOCIAL", "SUPPORT"],
+    "type": "SINGLE_CHOICE",
+    "title": "当你需要帮助时，你身边有可以毫无顾忌倾诉和求助的朋友吗？",
+    "options": [
+      { "id": "q402_A", "text": "有，而且很信赖他们", "score": 5 },
+      { "id": "q402_B", "text": "有，但一般只说一部分烦恼", "score": 3 },
+      { "id": "q402_C", "text": "没有，我觉得没人能真正理解我", "score": 1 }
+    ]
+  },
+  {
+    "id": "q403",
+    "tags": ["SOCIAL", "LONELINESS"],
+    "type": "SLIDER",
+    "title": "请评估你最近感到孤独的程度 (0分完全不孤独 - 10分极度孤独)"
+  },
+  {
+    "id": "q404",
+    "tags": ["SOCIAL", "BOUNDARY"],
+    "type": "SINGLE_CHOICE",
+    "title": "面对别人不合理的请求，你能果断拒绝吗？",
+    "options": [
+      { "id": "q404_A", "text": "能，我会优先考虑自己的感受", "score": 5 },
+      { "id": "q404_B", "text": "偶尔能，但常常会觉得不好意思", "score": 3 },
+      { "id": "q404_C", "text": "极难拒绝，经常委屈自己迎合别人", "score": 1 }
+    ]
+  },
+  {
+    "id": "q405",
+    "tags": ["SOCIAL", "FAMILY"],
+    "type": "TEXT",
+    "title": "最近一次和家人联系是什么时候？氛围怎么样？"
+  },
+  {
+    "id": "q501",
+    "tags": ["CAREER", "FUTURE"],
+    "type": "SINGLE_CHOICE",
+    "title": "想到毕业后的去向（考研/就业/出国），你现在的感受是？",
+    "options": [
+      { "id": "q501_A", "text": "目标清晰，正在按部就班准备", "score": 5 },
+      { "id": "q501_B", "text": "大方向有了，但偶尔还会迷茫", "score": 4 },
+      { "id": "q501_C", "text": "很迷茫，完全不知道自己想干什么", "score": 2 },
+      { "id": "q501_D", "text": "极度焦虑，一想到未来就害怕", "score": 1 }
+    ]
+  },
+  {
+    "id": "q502",
+    "tags": ["CAREER", "CONFIDENCE"],
+    "type": "SLIDER",
+    "title": "你对能够顺利完成学业并找到合适出路的信心有多大？(0分毫无信心 - 10分信心十足)"
+  },
+  {
+    "id": "q503",
+    "tags": ["CAREER", "PEER_PRESSURE"],
+    "type": "SINGLE_CHOICE",
+    "title": "看到身边的同学拿了奖学金或大厂Offer，你通常的反应是？",
+    "options": [
+      { "id": "q503_A", "text": "为他们高兴，同时激励自己", "score": 5 },
+      { "id": "q503_B", "text": "有一点压力，但能专注在自己的节奏上", "score": 4 },
+      { "id": "q503_C", "text": "感到强烈的同辈压力（Peer Pressure），陷入自我怀疑", "score": 1 }
+    ]
+  },
+  {
+    "id": "q504",
+    "tags": ["CAREER", "SKILL"],
+    "type": "TEXT",
+    "title": "抛开世俗的标准，你内心深处真正渴望从事的职业或生活状态是什么样的？"
+  },
+  {
+    "id": "q601",
+    "tags": ["SELF_ESTEEM", "GROWTH"],
+    "type": "SINGLE_CHOICE",
+    "title": "总体而言，你对自己目前的评价是积极的吗？",
+    "options": [
+      { "id": "q601_A", "text": "是的，我很接纳现在的自己", "score": 5 },
+      { "id": "q601_B", "text": "大部分时候还行，偶尔会挑剔自己", "score": 4 },
+      { "id": "q601_C", "text": "经常觉得自己不够好，充满自我否定", "score": 1 }
+    ]
+  },
+  {
+    "id": "q602",
+    "tags": ["SELF_ESTEEM", "MINDSET"],
+    "type": "SINGLE_CHOICE",
+    "title": "当你在某项考试或比赛中表现不佳时，你会怎么想？",
+    "options": [
+      { "id": "q602_A", "text": "这只是次失败的尝试，我可以总结经验", "score": 5 },
+      { "id": "q602_B", "text": "有点难受，但我知道自己尽力了", "score": 4 },
+      { "id": "q602_C", "text": "觉得是自己能力不行，非常自卑", "score": 1 }
+    ]
+  },
+  {
+    "id": "q603",
+    "tags": ["SELF_ESTEEM", "BODY_IMAGE"],
+    "type": "SINGLE_CHOICE",
+    "title": "你是否经常对自己的外貌或身材感到焦虑（容貌焦虑）？",
+    "options": [
+      { "id": "q603_A", "text": "很少，我接受自己的样子", "score": 5 },
+      { "id": "q603_B", "text": "偶尔会有，但不影响生活", "score": 4 },
+      { "id": "q603_C", "text": "经常焦虑，甚至因此不愿社交或过度节食", "score": 1 }
+    ]
+  },
+  {
+    "id": "q604",
+    "tags": ["SELF_ESTEEM", "HAPPINESS"],
+    "type": "SLIDER",
+    "title": "综合来看，给最近两周的幸福感打个分吧 (0分很不幸福 - 10分非常幸福)"
+  },
+  {
+    "id": "q605",
+    "tags": ["SELF_ESTEEM", "APPRECIATION"],
+    "type": "TEXT",
+    "title": "今天，试着夸奖一下自己吧！写下一件你觉得自己做得不错的小事："
+  },
+  {
+    "id": "q999",
+    "tags": ["GENERAL", "FEEDBACK"],
+    "type": "TEXT",
+    "title": "最后，这里是你的专属树洞。你有什么想对心助小饼干说的吗？"
+  }
+]
