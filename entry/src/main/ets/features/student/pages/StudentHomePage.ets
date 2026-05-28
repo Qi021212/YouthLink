@@ -40,6 +40,13 @@ struct StudentHomePage {
       route: RouterPath.RHYTHM,
       bgColor: Colors.MORANDI_PURPLE,
       icon: '🥁'
+    },
+    {
+      title: '波形静观',
+      subtitle: '视觉跟随，平静思绪',
+      route: RouterPath.CALM_WAVE,
+      bgColor: Colors.MORANDI_PURPLE,
+      icon: '🌊'
     }
   ]
 

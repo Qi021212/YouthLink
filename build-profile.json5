@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\33778\\.ohos\\config\\default_YouthLink_3md5PGFtHOhs9xPOrWMO461YqdWTjwcYZrB0xwu-V-U=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001A9F01B8216824DA73CE84DB3A43514FA6E9FDC39EDC21D121C2F79C9309E3A88190F133CF16C7",
+          "profile": "C:\\Users\\33778\\.ohos\\config\\default_YouthLink_3md5PGFtHOhs9xPOrWMO461YqdWTjwcYZrB0xwu-V-U=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\33778\\.ohos\\config\\default_YouthLink_3md5PGFtHOhs9xPOrWMO461YqdWTjwcYZrB0xwu-V-U=.p12",
+          "storePassword": "0000001AA611519EA5E71A09839CD1CA792B236DECF0CF3CAABDE549CF7717FFC566D62B18A24D3393BC"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
