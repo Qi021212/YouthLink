@@ -11,4 +11,6 @@ export class RouterPath {
   static readonly APPOINTMENT = 'features/student/pages/AppointmentPage'
   static readonly ACTIVITY = 'features/student/pages/ActivityPage'
   static readonly PROFILE = 'features/student/pages/ProfilePage'
+  static readonly PORTRAIT_RESULT = 'features/student/pages/PortraitResultPage'
+  static readonly CALM_WAVE = 'features/student/pages/CalmWavePage'
 }

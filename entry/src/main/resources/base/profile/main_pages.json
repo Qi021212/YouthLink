@@ -6,6 +6,9 @@
     "features/student/pages/StudentHomePage",
     "features/student/pages/BreathingPage",
     "features/student/pages/AttentionPage",
-    "features/student/pages/RhythmPage"
+    "features/student/pages/RhythmPage",
+    "features/student/pages/CalmWavePage",
+    "features/student/pages/PortraitResultPage",
+    "features/student/pages/SemiMonthlyPage"
   ]
 }
