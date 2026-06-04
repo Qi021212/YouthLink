@@ -458,30 +458,54 @@ struct StudentHomePage {
           this.UserHeader()
 
           Column() {
-            Text('咨询预约')
-              .fontSize(20)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Colors.TEXT_PRIMARY)
-              .margin({ bottom: 16 })
-
-            Text('心理咨询预约功能')
-              .fontSize(14)
-              .fontColor(Colors.TEXT_SECONDARY)
-
             Column() {
-              Text('💬')
-                .fontSize(48)
+              Row() {
+                Column() {
+                  Text('咨询预约')
+                    .fontSize(18)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(Colors.TEXT_PRIMARY)
+                  Text('心理咨询室辅导预约')
+                    .fontSize(12)
+                    .fontColor(Colors.TEXT_SECONDARY)
+                    .margin({ top: 6 })
+                }
+                .alignItems(HorizontalAlign.Start)
+
+                Blank()
+
+                Text('💬')
+                  .fontSize(28)
+              }
+              .width('100%')
+            }
+            .width('100%')
+            .padding(20)
+            .backgroundColor(Colors.CARD_BG)
+            .borderRadius(16)
+            .shadow({ radius: 6, color: '#0A000000', offsetY: 2 })
+            .margin({ bottom: 20 })
+            .onClick(() => {
+              router.pushUrl({ url: RouterPath.ROOM_BOOKING })
+            })
+
+            // 历史报告
+            Column() {
+              Text('历史记录')
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(Colors.TEXT_PRIMARY)
                 .margin({ bottom: 12 })
-              Text('功能开发中...')
+                .alignSelf(ItemAlign.Start)
+
+              Text('暂无历史记录')
                 .fontSize(14)
                 .fontColor(Colors.TEXT_HINT)
             }
             .width('100%')
-            .height(160)
-            .justifyContent(FlexAlign.Center)
+            .padding(20)
             .backgroundColor(Colors.CARD_BG)
             .borderRadius(16)
-            .margin({ top: 20 })
           }
           .width('100%')
           .padding(24)

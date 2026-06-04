@@ -71,3 +71,26 @@ export async function hasKey(key: string): Promise<boolean> {
   }
   return false
 }
+
+export async function putObject(key: string, value: object): Promise<void> {
+  if (dataPreferences) {
+    const jsonStr = JSON.stringify(value)
+    await dataPreferences.put(key, jsonStr)
+    await dataPreferences.flush()
+  }
+}
+
+export async function getObject<T>(key: string, defaultValue: T | null = null): Promise<T | null> {
+  if (dataPreferences) {
+    const jsonStr = await dataPreferences.get(key, '') as string
+    if (jsonStr) {
+      try {
+        return JSON.parse(jsonStr) as T
+      } catch (e) {
+        console.error('解析JSON失败', JSON.stringify(e))
+        return defaultValue
+      }
+    }
+  }
+  return defaultValue
+}

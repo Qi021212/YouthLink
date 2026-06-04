@@ -9,6 +9,7 @@
     "features/student/pages/RhythmPage",
     "features/student/pages/CalmWavePage",
     "features/student/pages/PortraitResultPage",
-    "features/student/pages/SemiMonthlyPage"
+    "features/student/pages/SemiMonthlyPage",
+    "features/student/pages/RoomBookingPage"
   ]
 }
