@@ -1,6 +1,8 @@
 import { router } from '@kit.ArkUI'
+import { common } from '@kit.AbilityKit'
 import { AuthManager } from '../../../core/auth/AuthManager'
 import { initStorage } from '../../../common/utils/StorageUtil'
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
 import { RouterPath } from '../../../common/constants/RouterPath'
 import { Colors } from '../../../common/constants/Colors'
 
@@ -23,6 +25,16 @@ struct SplashPage {
 
     try {
       await initStorage(getContext(this))
+    } catch (err) {
+    }
+
+    try {
+      const dbHelper = DatabaseHelper.getInstance()
+      await dbHelper.init(getContext(this) as common.UIAbilityContext)
+    } catch (err) {
+    }
+
+    try {
       const authManager = AuthManager.getInstance()
       const hasSession = await authManager.restoreSession()
 

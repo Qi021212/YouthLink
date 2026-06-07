@@ -53,13 +53,22 @@ struct StudentHomePage {
 
   async aboutToAppear(): Promise<void> {
     const authManager = AuthManager.getInstance()
+
+    const memName = authManager.getUserName()
+    if (memName.length > 0) {
+      this.userName = memName
+      return
+    }
+
     const json = await authManager.getUserInfoJson()
     try {
       const info: UserInfoJson = JSON.parse(json) as UserInfoJson
-      if (info.name) {
+      if (info.name && info.name.length > 0) {
         this.userName = info.name
-      } else if (info.uid) {
+        authManager.setUserName(info.name)
+      } else if (info.uid && info.uid.length > 0) {
         this.userName = info.uid
+        authManager.setUserName(info.uid)
       }
     } catch (err) {
     }

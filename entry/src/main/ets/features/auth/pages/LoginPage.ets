@@ -1,8 +1,10 @@
 import { promptAction, router } from '@kit.ArkUI'
+import { common } from '@kit.AbilityKit'
 import { Colors } from '../../../common/constants/Colors'
 import { RoleType, UserInfo } from '../../../common/model/UserInfo'
 import { AuthService } from '../AuthService'
 import { AuthManager } from '../../../core/auth/AuthManager'
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
 import { RouterPath } from '../../../common/constants/RouterPath'
 
 interface RoleOption {
@@ -58,6 +60,13 @@ struct LoginPage {
     this.isLoading = true
 
     try {
+      if (this.selectedRole === RoleType.STUDENT) {
+        const dbHelper = DatabaseHelper.getInstance()
+        if (!dbHelper.isReady()) {
+          await dbHelper.ensureInit(getContext(this) as common.UIAbilityContext)
+        }
+      }
+
       const result = await this.authService.login(
         this.account.trim(),
         this.password,
@@ -73,9 +82,13 @@ struct LoginPage {
         const userInfo = new UserInfo()
         userInfo.uid = this.account
         userInfo.roleType = this.selectedRole
+        userInfo.name = result.studentName.length > 0 ? result.studentName : this.account
         await authManager.saveUserInfo(JSON.stringify(userInfo.toJson()))
+        authManager.setUserName(userInfo.name)
 
-        promptAction.showToast({ message: '登录成功', duration: 1500 })
+        const welcomeMsg = result.studentName.length > 0 ?
+          `${result.studentName}，欢迎回来` : '登录成功'
+        promptAction.showToast({ message: welcomeMsg, duration: 1500 })
         setTimeout(() => {
           router.replaceUrl({ url: result.jumpPath })
         }, 500)
@@ -253,10 +266,21 @@ struct LoginPage {
 
       Blank()
 
-      Text('首次使用？请联系辅导员获取账号')
-        .fontSize(12)
-        .fontColor(Colors.TEXT_HINT)
-        .padding({ bottom: 32 })
+      Row() {
+        Text('没有账号？')
+          .fontSize(14)
+          .fontColor(Colors.TEXT_HINT)
+
+        Text('立即注册')
+          .fontSize(14)
+          .fontColor(Colors.PRIMARY)
+          .fontWeight(FontWeight.Medium)
+          .margin({ left: 4 })
+          .onClick(() => {
+            router.pushUrl({ url: RouterPath.REGISTER })
+          })
+      }
+      .padding({ bottom: 36 })
     }
     .width('100%')
     .height('100%')

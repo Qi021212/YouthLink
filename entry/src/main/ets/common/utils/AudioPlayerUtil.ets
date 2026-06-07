@@ -1,6 +1,14 @@
 import { media } from '@kit.MediaKit'
 import { common } from '@kit.AbilityKit'
 import { resourceManager } from '@kit.LocalizationKit'
+import { BusinessError } from '@kit.BasicServicesKit'
+
+export interface AudioResult {
+  success: boolean
+  error: string
+}
+
+const TAG = 'AudioPlayerUtil'
 
 export function getAppContext(component: object): common.UIAbilityContext {
   return getContext(component) as common.UIAbilityContext
@@ -30,13 +38,6 @@ export async function stopAndReleasePlayer(
   return null
 }
 
-/**
- * 播放一段循环背景音（如海浪、雨声）。
- * 返回创建并开始播放的 AVPlayer 实例，调用方负责生命周期管理。
- * @param component 当前组件 this，用于 getContext()
- * @param rawFileName rawfile 目录下的音频文件名，如 'bg_ocean.mp3'
- * @param loop 是否循环播放
- */
 export async function playBackgroundSound(
   component: object,
   rawFileName: string,
@@ -47,45 +48,114 @@ export async function playBackgroundSound(
 
   try {
     player = await media.createAVPlayer()
-    let context = getAppContext(component)
-    let rawFd = await getRawFd(context, rawFileName)
+    const avPlayer = player
+    const context = getAppContext(component)
+    const rawFd = await getRawFd(context, rawFileName)
 
-    player.fdSrc = { fd: rawFd.fd, offset: rawFd.offset, length: rawFd.length }
-    player.loop = loop
-    await player.play()
+    avPlayer.fdSrc = { fd: rawFd.fd, offset: rawFd.offset, length: rawFd.length }
+    avPlayer.loop = loop
 
-    return player
+    await new Promise<void>((resolve: () => void) => {
+      avPlayer.on('stateChange', (state: media.AVPlayerState) => {
+        if (state === 'prepared') {
+          resolve()
+        }
+      })
+    })
+
+    avPlayer.on('error', (err: BusinessError) => {
+      console.error(`${TAG} [bg] error: [${err.code}] ${err.message}`)
+    })
+
+    await avPlayer.play()
+    return avPlayer
   } catch (err) {
+    const e = err as BusinessError
+    console.error(`${TAG} [bg] failed: ${rawFileName}, code=${e.code}, msg=${e.message}`)
     return stopAndReleasePlayer(player)
   }
 }
 
-/**
- * 播放一段一次性短音效（如节拍点击音）。
- * 播放完毕后自动释放资源。
- * @param component 当前组件 this，用于 getContext()
- * @param rawFileName rawfile 目录下的音效文件名
- */
 export async function playOnceSound(
   component: object,
   rawFileName: string
 ): Promise<void> {
   try {
-    let player = await media.createAVPlayer()
-    let context = getAppContext(component)
-    let rawFd = await getRawFd(context, rawFileName)
+    const avPlayer = await media.createAVPlayer()
+    const context = getAppContext(component)
+    const rawFd = await getRawFd(context, rawFileName)
+
+    avPlayer.fdSrc = { fd: rawFd.fd, offset: rawFd.offset, length: rawFd.length }
+    avPlayer.loop = false
+
+    avPlayer.on('error', (err: BusinessError) => {
+      console.error(`${TAG} [once] error: [${err.code}] ${err.message}`)
+      avPlayer.release().catch(() => {})
+    })
+
+    await new Promise<void>((resolve: () => void) => {
+      avPlayer.on('stateChange', (state: media.AVPlayerState) => {
+        if (state === 'prepared') {
+          resolve()
+        }
+      })
+    })
+
+    avPlayer.on('stateChange', (state: media.AVPlayerState) => {
+      if (state === 'completed' || state === 'stopped' || state === 'error') {
+        avPlayer.release().catch(() => {})
+      }
+    })
+
+    await avPlayer.play()
+  } catch (err) {
+    const e = err as BusinessError
+    console.error(`${TAG} [once] failed: ${rawFileName}, code=${e.code}, msg=${e.message}`)
+  }
+}
+
+export async function testAudioPlayback(component: object): Promise<AudioResult> {
+  try {
+    const player = await media.createAVPlayer()
+    const context = getAppContext(component)
+    const rawFd = await getRawFd(context, 'beat_tick.mp3')
 
     player.fdSrc = { fd: rawFd.fd, offset: rawFd.offset, length: rawFd.length }
     player.loop = false
-    player.on('stateChange', (state: media.AVPlayerState) => {
-      if (state === 'completed' || state === 'stopped') {
-        player.release().catch(() => {})
-      }
+
+    await new Promise<void>((resolve: () => void) => {
+      player.on('stateChange', (state: media.AVPlayerState) => {
+        if (state === 'prepared') {
+          resolve()
+        }
+      })
     })
-    player.on('error', () => {
-      player.release().catch(() => {})
-    })
+
     await player.play()
+
+    await new Promise<void>((resolve: () => void) => {
+      setTimeout(() => {
+        player.stop().catch(() => {})
+        player.release().catch(() => {})
+        resolve()
+      }, 2000)
+    })
+
+    return { success: true, error: '' }
   } catch (err) {
+    const e = err as BusinessError
+    let msg = e.message
+    if (e.code !== undefined) {
+      msg = `[${e.code}] ${e.message}`
+    }
+    if (msg.indexOf('file') >= 0) {
+      msg = '音频文件未找到，请检查 rawfile 目录'
+    } else if (msg.indexOf('create') >= 0 || msg.indexOf('5400101') >= 0) {
+      msg = '模拟器不支持音频播放，请使用真机测试'
+    } else if (msg.indexOf('codec') >= 0 || msg.indexOf('format') >= 0) {
+      msg = '音频格式不支持，请确认文件为有效 MP3'
+    }
+    console.error(`${TAG} [test] failed: ${msg}`)
+    return { success: false, error: msg }
   }
 }

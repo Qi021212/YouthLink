@@ -1,6 +1,7 @@
 export class RouterPath {
   static readonly SPLASH = 'features/auth/pages/SplashPage'
   static readonly LOGIN = 'features/auth/pages/LoginPage'
+  static readonly REGISTER = 'features/auth/pages/RegisterPage'
   static readonly STUDENT_HOME = 'features/student/pages/StudentHomePage'
   static readonly BREATHING = 'features/student/pages/BreathingPage'
   static readonly ATTENTION = 'features/student/pages/AttentionPage'

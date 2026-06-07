@@ -1,5 +1,6 @@
 import { AuthResult } from '../../common/model/ApiResponse'
 import { RoleType } from '../../common/model/UserInfo'
+import { DatabaseHelper } from '../../common/utils/DatabaseHelper'
 
 const SIMULATED_DELAY = 800
 
@@ -67,6 +68,13 @@ export class AuthService {
       return result
     }
 
+    if (roleType === RoleType.STUDENT) {
+      const dbResult = await this.tryDatabaseLogin(account, password)
+      if (dbResult !== null) {
+        return dbResult
+      }
+    }
+
     const success = this.validateCredentials(account, password, roleType)
 
     if (success) {
@@ -75,6 +83,7 @@ export class AuthService {
       result.accessToken = this.generateMockToken(account, roleType)
       result.refreshToken = this.generateMockRefreshToken(account)
       result.jumpPath = this.getJumpPath(roleType)
+      result.studentName = this.getMockName(account)
       return result
     } else {
       const failCount = (this.loginFailCount.get(account) || 0) + 1
@@ -95,6 +104,25 @@ export class AuthService {
     }
   }
 
+  private async tryDatabaseLogin(uid: string, password: string): Promise<AuthResult | null> {
+    try {
+      const dbHelper = DatabaseHelper.getInstance()
+      const student = await dbHelper.validateLogin(uid, password)
+      if (student !== null) {
+        const result = new AuthResult()
+        result.authStatus = true
+        result.accessToken = this.generateMockToken(uid, RoleType.STUDENT)
+        result.refreshToken = this.generateMockRefreshToken(uid)
+        result.jumpPath = this.getJumpPath(RoleType.STUDENT)
+        result.studentName = student.name
+        this.loginFailCount.set(uid, 0)
+        return result
+      }
+    } catch (err) {
+    }
+    return null
+  }
+
   private validateCredentials(account: string, password: string, roleType: RoleType): boolean {
     if (account === 'demo' && password === '123456') {
       return true
@@ -110,6 +138,17 @@ export class AuthService {
       return true
     }
     return false
+  }
+
+  private getMockName(account: string): string {
+    const names: Record<string, string> = {
+      '2024001': '测试同学',
+      'demo': '演示用户',
+      'T10001': '王老师',
+      'A10001': '李主任',
+      'C10001': '咨询师陈',
+    }
+    return names[account] || ''
   }
 
   private isAccountLocked(account: string): boolean {

@@ -11,6 +11,7 @@ export class AuthManager {
   private accessToken: string = ''
   private refreshToken: string = ''
   private isLoggedIn: boolean = false
+  private userName: string = ''
 
   static getInstance(): AuthManager {
     if (!AuthManager.instance) {
@@ -83,5 +84,13 @@ export class AuthManager {
 
   async getUserInfoJson(): Promise<string> {
     return await getString(KEY_USER_INFO, '')
+  }
+
+  setUserName(name: string): void {
+    this.userName = name
+  }
+
+  getUserName(): string {
+    return this.userName
   }
 }

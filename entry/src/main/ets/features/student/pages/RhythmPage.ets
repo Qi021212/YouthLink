@@ -55,6 +55,7 @@ struct RhythmPage {
   private energyUpdateTimerId: number = -1
   private beatTickPlayer: media.AVPlayer | null = null
   private cachedTickFd: resourceManager.RawFileDescriptor | null = null
+  private isFiringTick: boolean = false
 
   aboutToAppear(): void {
     this.updateBeatInterval()
@@ -219,27 +220,43 @@ struct RhythmPage {
   initBeatPlayer(): void {
     try {
       let context = getContext(this) as common.UIAbilityContext
-      context.resourceManager.getRawFd('beat_tick.wav').then((rawFd: resourceManager.RawFileDescriptor) => {
+      context.resourceManager.getRawFd('beat_tick.mp3').then((rawFd: resourceManager.RawFileDescriptor) => {
         this.cachedTickFd = rawFd
         media.createAVPlayer().then((player: media.AVPlayer) => {
           this.beatTickPlayer = player
-          player.fdSrc = { fd: rawFd.fd, offset: rawFd.offset, length: rawFd.length }
           player.loop = false
+          player.on('error', (err: Error) => {
+            console.error('Rhythm beat player error: ' + err.message)
+          })
         })
       })
     } catch (err) {
     }
   }
 
-  fireTick(): void {
-    if (!this.beatTickPlayer || !this.cachedTickFd) {
+  async fireTick(): Promise<void> {
+    const player = this.beatTickPlayer
+    const fd = this.cachedTickFd
+    if (!player || !fd || this.isFiringTick) {
       return
     }
+    this.isFiringTick = true
     try {
-      let fd = this.cachedTickFd
-      this.beatTickPlayer.fdSrc = { fd: fd.fd, offset: fd.offset, length: fd.length }
-      this.beatTickPlayer.play().catch(() => {})
+      await player.stop()
+      player.fdSrc = { fd: fd.fd, offset: fd.offset, length: fd.length }
+
+      await new Promise<void>((resolve: () => void) => {
+        player.on('stateChange', (state: media.AVPlayerState) => {
+          if (state === 'prepared') {
+            resolve()
+          }
+        })
+      })
+
+      await player.play()
     } catch (err) {
+    } finally {
+      this.isFiringTick = false
     }
   }
 

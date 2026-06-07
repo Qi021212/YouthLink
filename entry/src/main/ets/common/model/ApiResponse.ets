@@ -23,6 +23,7 @@ export class AuthResult {
   jumpPath: string = ''
   errorCode: number = 0
   errorMsg: string = ''
+  studentName: string = ''
 
   static fromJson(json: Record<string, Object>): AuthResult {
     const result = new AuthResult()
@@ -32,6 +33,7 @@ export class AuthResult {
     result.jumpPath = json['jumpPath'] as string || ''
     result.errorCode = json['errorCode'] as number || 0
     result.errorMsg = json['errorMsg'] as string || ''
+    result.studentName = json['studentName'] as string || ''
     return result
   }
 }
