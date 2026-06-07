@@ -3,6 +3,8 @@ import { Colors } from '../../../common/constants/Colors'
 import { RouterPath } from '../../../common/constants/RouterPath'
 import { AuthManager } from '../../../core/auth/AuthManager'
 import { UserInfoJson } from '../../../common/model/UserInfo'
+import { RiskAlgorithm, ReportSummary } from '../../../common/utils/RiskAlgorithm'
+import { ActivityPage } from './ActivityPage'
 
 interface ModuleCard {
   title: string
@@ -17,6 +19,9 @@ interface ModuleCard {
 struct StudentHomePage {
   @State userName: string = '同学'
   @State currentIndex: number = 0
+
+  @State historyReports: Array<ReportSummary> = [];
+
   private tabsController: TabsController = new TabsController()
 
   // 调节练习卡片数据
@@ -51,27 +56,38 @@ struct StudentHomePage {
     }
   ]
 
-  async aboutToAppear(): Promise<void> {
-    const authManager = AuthManager.getInstance()
+  // 定义一个加载历史的方法，在 aboutToAppear() 或者页面的 onPageShow() 里调用它
+  async loadHistoryReports() {
+    this.historyReports = await RiskAlgorithm.getHistoryList(getContext(this));
+  }
 
-    const memName = authManager.getUserName()
+  aaboutToAppear(): void {
+    // 1. 静默触发异步历史报告拉取（不需要在外面写 await）
+    this.loadHistoryReports();
+
+    // 2. 正常的同步状态获取
+    const authManager = AuthManager.getInstance();
+    const memName = authManager.getUserName();
     if (memName.length > 0) {
-      this.userName = memName
-      return
+      this.userName = memName;
+      return;
     }
 
-    const json = await authManager.getUserInfoJson()
-    try {
-      const info: UserInfoJson = JSON.parse(json) as UserInfoJson
-      if (info.name && info.name.length > 0) {
-        this.userName = info.name
-        authManager.setUserName(info.name)
-      } else if (info.uid && info.uid.length > 0) {
-        this.userName = info.uid
-        authManager.setUserName(info.uid)
+    // 3. 将原本的 await 语句改用原生的 .then() 异步链式调用，规避 async 冲突
+    authManager.getUserInfoJson().then((json: string) => {
+      try {
+        const info: UserInfoJson = JSON.parse(json) as UserInfoJson;
+        if (info.name && info.name.length > 0) {
+          this.userName = info.name;
+          authManager.setUserName(info.name);
+        } else if (info.uid && info.uid.length > 0) {
+          this.userName = info.uid;
+          authManager.setUserName(info.uid);
+        }
+      } catch (err) {
+        console.error('解析缓存用户信息失败:', err);
       }
-    } catch (err) {
-    }
+    });
   }
 
   onLogout(): void {
@@ -396,12 +412,14 @@ struct StudentHomePage {
       }
       .tabBar(this.TabBuilder('自助调节', 1, '🧘'))
 
+      // 3. 🌟 修改后的 TabContent 代码：
       // ---------- 第 3 个 Tab：半月报 ----------
       TabContent() {
         Column() {
           this.UserHeader()
 
           Column() {
+            // 评估入口卡片
             Column() {
               Row() {
                 Column() {
@@ -433,7 +451,7 @@ struct StudentHomePage {
               router.pushUrl({ url: RouterPath.SEMI_MONTHLY })
             })
 
-            // 历史报告
+            // 历史报告板块
             Column() {
               Text('历史报告')
                 .fontSize(16)
@@ -442,14 +460,65 @@ struct StudentHomePage {
                 .margin({ bottom: 12 })
                 .alignSelf(ItemAlign.Start)
 
-              Text('暂无历史报告')
-                .fontSize(14)
-                .fontColor(Colors.TEXT_HINT)
+              // 🌟 核心重构：判断有无历史报告数据
+              if (this.historyReports.length === 0) {
+                Column() {
+                  Text('暂无历史报告')
+                    .fontSize(14)
+                    .fontColor(Colors.TEXT_HINT)
+                    .margin({ top: 20, bottom: 20 })
+                }
+                .width('100%')
+                .justifyContent(FlexAlign.Center)
+              } else {
+                // 有数据时展示滚动列表
+                List({ space: 10 }) {
+                  ForEach(this.historyReports, (report: ReportSummary) => {
+                    ListItem() {
+                      Row() {
+                        Column() {
+                          Text(`心理健康评估报告`)
+                            .fontSize(15)
+                            .fontWeight(FontWeight.Medium)
+                            .fontColor(Colors.TEXT_PRIMARY)
+                          Text(`评估时间: ${report.dateStr}`)
+                            .fontSize(12)
+                            .fontColor(Colors.TEXT_SECONDARY)
+                            .margin({ top: 4 })
+                        }
+                        .alignItems(HorizontalAlign.Start)
+
+                        Blank()
+
+                        Text('查看详情 ›')
+                          .fontSize(13)
+                          .fontColor(Colors.PRIMARY)
+                      }
+                      .width('100%')
+                      .padding(14)
+                      .backgroundColor('#F7F8FA')
+                      .borderRadius(12)
+                      .onClick(() => {
+                        // 🌟 点击跳转到画像结果页，并把这封报告独有的时间戳通过路由参数传过去
+                        router.pushUrl({
+                          url: 'features/student/pages/PortraitResultPage',
+                          params: {
+                            'historicalTimestamp': report.timestamp // 关键传参！
+                          }
+                        })
+                      })
+                    }
+                  }, (report: ReportSummary) => report.timestamp.toString())
+                }
+                .width('100%')
+                .layoutWeight(1) // 让列表自动填满卡片剩余高度
+              }
             }
             .width('100%')
             .padding(20)
             .backgroundColor(Colors.CARD_BG)
             .borderRadius(16)
+            .layoutWeight(1) // 撑开历史卡片，使其具有自适应容器高度
           }
           .width('100%')
           .padding(24)
@@ -529,37 +598,13 @@ struct StudentHomePage {
       // ---------- 第 5 个 Tab：活动预约 ----------
       TabContent() {
         Column() {
+          // 1. 顶部的通用蓝色用户信息栏保持统一
           this.UserHeader()
 
-          Column() {
-            Text('活动预约')
-              .fontSize(20)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Colors.TEXT_PRIMARY)
-              .margin({ bottom: 16 })
-
-            Text('心理健康活动推荐与预约')
-              .fontSize(14)
-              .fontColor(Colors.TEXT_SECONDARY)
-
-            Column() {
-              Text('🎉')
-                .fontSize(48)
-                .margin({ bottom: 12 })
-              Text('功能开发中...')
-                .fontSize(14)
-                .fontColor(Colors.TEXT_HINT)
-            }
-            .width('100%')
-            .height(160)
-            .justifyContent(FlexAlign.Center)
-            .backgroundColor(Colors.CARD_BG)
-            .borderRadius(16)
-            .margin({ top: 20 })
-          }
-          .width('100%')
-          .padding(24)
-          .layoutWeight(1)
+          // 2. 🌟 核心修改：直接实例化你的活动预约动态子页面
+          // 将当前的 currentIndex 传递进去，激活它的 @Watch 刷新机制
+          ActivityPage({ parentCurrentIndex: this.currentIndex })
+            .layoutWeight(1) // 撑满除 Header 外的剩余全部高度
         }
         .width('100%')
         .height('100%')
@@ -572,6 +617,10 @@ struct StudentHomePage {
     .backgroundColor(Colors.SURFACE)
     .onChange((index: number) => {
       this.currentIndex = index
+      // 只要切到第 3 个 Tab（半月报，索引为 2），就强行静默刷新一次本地 SQLite
+      if (index === 2) {
+        this.loadHistoryReports()
+      }
     })
   }
 }

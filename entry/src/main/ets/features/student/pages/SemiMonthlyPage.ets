@@ -70,7 +70,7 @@ struct SemiMonthlyPage {
 
       // 2. 读取用户的近期风险画像（模拟从 StorageUtil 获取）
       // 现在换成动态算法计算：
-      const userRecentRisks: string[] = await RiskAlgorithm.calculateRecentRisks()
+      const userRecentRisks: string[] = await RiskAlgorithm.calculateRecentRisks(getContext(this))
       let extracted: SurveyQuestion[] = []
 
       // 3. 如果用户状态完全健康（无风险标签），则回退到全量随机盲抽
@@ -169,7 +169,7 @@ struct SemiMonthlyPage {
     this.behaviors[finalId].totalDuration += (now - this.behaviors[finalId].enterTime)
 
     // 1. 移交公用引擎进行分数判定与持久化
-    await RiskAlgorithm.evaluateAndSave(this.questions, this.answers, this.behaviors)
+    const currentBatchTimestamp = await RiskAlgorithm.evaluateAndSave(getContext(this), this.questions, this.answers, this.behaviors)
 
     // 🚀 核心升级：问卷全量动态答案语义序列化
     let qaTextList: string[] = []
@@ -205,7 +205,8 @@ struct SemiMonthlyPage {
 
     // 3. 路由跳转并传递数据至画像页 (将原本单一的树洞文本升级为全量回答历史)
     RouterIndex.replace('features/student/pages/PortraitResultPage', {
-      'fullQaHistory': fullQaHistory
+      'fullQaHistory': fullQaHistory,
+      'currentTimestamp': currentBatchTimestamp // 👈 传过去，方便结果页拿到 AI 文本后跟它绑定
     })
   }
 

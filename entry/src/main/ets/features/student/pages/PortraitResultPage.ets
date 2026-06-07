@@ -1,7 +1,7 @@
 import { router } from '@kit.ArkUI'
 import { Colors } from '../../../common/constants/Colors'
 import { getString } from '../../../common/utils/StorageUtil'
-import { HistoryRecord } from '../../../common/utils/RiskAlgorithm'
+import { RiskAlgorithm, HistoryRecord } from '../../../common/utils/RiskAlgorithm'
 import { AIPortraitService } from '../service/AIPortraitService'
 import { RouterIndex } from '../../../router/RouterIndex'
 
@@ -20,23 +20,47 @@ struct PortraitResultPage {
   private fullQaHistory: string = ''
 
   async aboutToAppear() {
-    // 1. 获取路由参数中的全量问答文本历史
-    const params = router.getParams() as Record<string, string>
-    if (params && params['fullQaHistory']) {
-      this.fullQaHistory = params['fullQaHistory']
-    }
+    const params = router.getParams() as Record<string, Object>
+    let ctx = getContext(this)
 
-    // 2. 从本地读取分数
-    const historyJson = await getString('LAST_SEMI_MONTHLY_SCORES', '[]')
-    try {
-      this.scores = JSON.parse(historyJson) as HistoryRecord[]
-    } catch (e) {
-      console.error(e)
-    }
+    // 场景 A：从主页的历史报告列表卡片点进来
+    if (params && params['historicalTimestamp']) {
+      let historyTs = params['historicalTimestamp'] as number;
 
-    // 3. 传给升级后的服务端方法
-    this.aiPortraitText = await AIPortraitService.generatePortrait(this.scores, this.fullQaHistory)
-    this.isLoading = false
+      // 1. 从 SQLite 加载当时的多维分数（驱动雷达图）
+      this.scores = await RiskAlgorithm.getScoresByTimestamp(ctx, historyTs);
+
+      // 2. 🌟 核心重构：直接从本地数据库提取当年存好的 AI 分析文本！零延迟，不走网络 AI 请求
+      this.aiPortraitText = await RiskAlgorithm.getAiReport(ctx, historyTs);
+
+      // 容错兜底：万一数据库里有分数但文本漏存了，再紧急呼叫一次 AI 补上
+      if (this.aiPortraitText.length === 0) {
+        this.aiPortraitText = await AIPortraitService.generatePortrait(this.scores, "查看历史归档报告");
+        await RiskAlgorithm.saveAiReport(ctx, historyTs, this.aiPortraitText);
+      }
+
+      this.isLoading = false;
+
+    }
+    // 场景 B：刚刚在答题页做完题，新鲜出炉提交进来的
+    else {
+      if (params && params['fullQaHistory']) {
+        this.fullQaHistory = params['fullQaHistory'] as string
+      }
+      // 拿到刚才答题页传过来的最新时间戳
+      let currentTs = params['currentTimestamp'] as number || Date.now();
+
+      // 1. 加载本次的分数（驱动雷达图）
+      this.scores = await RiskAlgorithm.getLatestScores(ctx);
+
+      // 2. 既然是第一次生成，老老实实调用大模型进行深度心理画像深度分析
+      this.aiPortraitText = await AIPortraitService.generatePortrait(this.scores, this.fullQaHistory);
+
+      // 3. 🌟 核心新增：趁着新鲜，把 AI 吐出来的段落文本塞进 SQLite，封存归档！
+      await RiskAlgorithm.saveAiReport(ctx, currentTs, this.aiPortraitText);
+
+      this.isLoading = false;
+    }
   }
 
   // 绘制雷达图核心算法
@@ -46,8 +70,8 @@ struct PortraitResultPage {
     // 🌟 优化1：稍微扩大逻辑画布的尺寸，给外围文字留出呼吸感
     const width = 380
     const height = 380
-    const centerX = width / 2
-    const centerY = height / 2
+    const centerX = width / 2 - 20
+    const centerY = height / 2 - 15
 
     // 🌟 优化2：缩小雷达图的骨架半径 (从 100 改为 80)，防止文字被边缘裁切
     const radius = 80
