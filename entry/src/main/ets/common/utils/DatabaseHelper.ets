@@ -1,5 +1,6 @@
 import { relationalStore } from '@kit.ArkData'
 import { common } from '@kit.AbilityKit'
+import { CaseData } from '../../features/counselor/model/CaseData';
 
 const DB_NAME = 'YouthLink.db'
 const TABLE_STUDENTS = 'students'
@@ -20,6 +21,25 @@ export interface StaffRow {
   name: string
   passwordHash: string
   createdAt: string
+}
+
+// 个案数据模型
+export interface CaseRow {
+  id: string;
+  studentName: string;
+  parentPhone: string;
+  deadline: number;
+  status: string;
+  createdAt: number;
+}
+
+// 沟通记录模型
+export interface RecordRow {
+  id: string;
+  caseId: string;
+  content: string;
+  type: string;
+  timestamp: number;
 }
 
 function stringToUint8Array(str: string): Uint8Array {
@@ -144,6 +164,28 @@ export class DatabaseHelper {
         created_at TEXT DEFAULT (datetime('now','localtime'))
       )
     `)
+
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS cases (
+        id TEXT PRIMARY KEY,
+        student_name TEXT NOT NULL,
+        parent_phone TEXT NOT NULL,
+        deadline INTEGER NOT NULL,
+        status TEXT DEFAULT '进行中',
+        created_at INTEGER
+      )
+    `);
+
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS records (
+        id TEXT PRIMARY KEY,
+        case_id TEXT NOT NULL,
+        content TEXT NOT NULL,
+        type TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        FOREIGN KEY(case_id) REFERENCES cases(id)
+      )
+    `);
 
     this.initialized = true
   }
@@ -394,5 +436,84 @@ export class DatabaseHelper {
       console.error('Database update failed:', JSON.stringify(err));
       return false;
     }
+  }
+
+  // 新增个案
+  async addCase(row: CaseRow): Promise<void> {
+    await this.rdbStore!.insert('cases', {
+      'id': row.id,
+      'student_name': row.studentName,
+      'parent_phone': row.parentPhone,
+      'deadline': row.deadline,
+      'status': row.status,
+      'created_at': row.createdAt
+    });
+  }
+
+  // 获取所有个案
+  async getAllCases(): Promise<CaseData[]> {
+    if (!this.rdbStore) return [];
+
+    const resultSet = await this.rdbStore.querySql('SELECT * FROM cases ORDER BY created_at DESC');
+    const result: CaseData[] = [];
+    while (resultSet.goToNextRow()) {
+      let caseItem = new CaseData(); // 实例化类
+      caseItem.id = resultSet.getString(resultSet.getColumnIndex('id'));
+      caseItem.studentName = resultSet.getString(resultSet.getColumnIndex('student_name'));
+      caseItem.parentPhone = resultSet.getString(resultSet.getColumnIndex('parent_phone'));
+      caseItem.deadline = resultSet.getLong(resultSet.getColumnIndex('deadline'));
+      caseItem.status = resultSet.getString(resultSet.getColumnIndex('status'));
+      caseItem.createdAt = resultSet.getLong(resultSet.getColumnIndex('created_at'));
+      result.push(caseItem);
+    }
+    resultSet.close();
+    return result;
+  }
+
+  // 添加沟通记录
+  async addRecord(row: RecordRow): Promise<void> {
+    await this.rdbStore!.insert('records', {
+      'id': row.id,
+      'case_id': row.caseId,
+      'content': row.content,
+      'type': row.type,
+      'timestamp': row.timestamp
+    });
+  }
+
+  // 根据个案ID获取记录（用于时间线）
+  async getRecordsByCaseId(caseId: string): Promise<RecordRow[]> {
+    const predicates = new relationalStore.RdbPredicates('records');
+    predicates.equalTo('case_id', caseId).orderByAsc('timestamp');
+    const resultSet = await this.rdbStore!.query(predicates);
+    const result: RecordRow[] = [];
+    while (resultSet.goToNextRow()) {
+      result.push({
+        id: resultSet.getString(resultSet.getColumnIndex('id')),
+        caseId: resultSet.getString(resultSet.getColumnIndex('case_id')),
+        content: resultSet.getString(resultSet.getColumnIndex('content')),
+        type: resultSet.getString(resultSet.getColumnIndex('type')),
+        timestamp: resultSet.getLong(resultSet.getColumnIndex('timestamp'))
+      });
+    }
+    resultSet.close();
+    return result;
+  }
+
+  // 确保在 DatabaseHelper.ts 中有这个方法
+  async getCaseById(id: string): Promise<CaseData | null> {
+    const predicates = new relationalStore.RdbPredicates('cases');
+    predicates.equalTo('id', id);
+    const resultSet = await this.rdbStore!.query(predicates);
+    if (resultSet.goToFirstRow()) {
+      // 此处请按需填充 resultSet 字段映射逻辑
+      let item = new CaseData();
+      item.id = resultSet.getString(resultSet.getColumnIndex('id'));
+      // ... 其他字段赋值
+      resultSet.close();
+      return item;
+    }
+    resultSet.close();
+    return null;
   }
 }
