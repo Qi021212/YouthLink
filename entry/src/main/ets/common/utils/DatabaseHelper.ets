@@ -356,4 +356,43 @@ export class DatabaseHelper {
     resultSet.close()
     return null
   }
+
+  /**
+   * 真实更新辅导员/员工密码
+   * @param tableName 表名（如 counselors 或 school_center）
+   * @param uid 唯一工号
+   * @param newPassword 新密码（会自动通过 hashPassword 加密）
+   */
+  async updateStaffPassword(tableName: string, uid: string, newPassword: string): Promise<boolean> {
+    if (!this.rdbStore) {
+      console.error('Database is not initialized');
+      return false;
+    }
+
+    try {
+      const newHash = hashPassword(newPassword);
+
+      // 🌟 核心：使用原始 SQL 语句执行更新
+      // 使用 ? 占位符防止 SQL 注入
+      const sql = `UPDATE ${tableName} SET password_hash = ? WHERE uid = ?`;
+
+      // 打印调试信息：看看你到底在往哪个表里更新哪个 UID
+      console.info(`[DEBUG] Executing SQL: ${sql} with params: [${newHash}, ${uid}]`);
+
+      await this.rdbStore.executeSql(sql, [newHash, uid]);
+
+      // 验证：更新完后，通过 findStaffByUid 检查密码哈希是否真的变了
+      const updatedRow = await this.findStaffByUid(tableName, uid);
+      if (updatedRow && updatedRow.passwordHash === newHash) {
+        console.info(`[SUCCESS] Password updated in DB for UID: ${uid}`);
+        return true;
+      } else {
+        console.error(`[FAIL] Verification failed after update.`);
+        return false;
+      }
+    } catch (err) {
+      console.error('Database update failed:', JSON.stringify(err));
+      return false;
+    }
+  }
 }

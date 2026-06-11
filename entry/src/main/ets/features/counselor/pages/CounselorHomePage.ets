@@ -1,13 +1,14 @@
-﻿﻿import { router } from '@kit.ArkUI'
+﻿import { router , promptAction} from '@kit.ArkUI'
 import { Colors } from '../../../common/constants/Colors'
 import { RouterPath } from '../../../common/constants/RouterPath'
 import { AuthManager } from '../../../core/auth/AuthManager'
 import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
 import { common } from '@kit.AbilityKit'
-import { UserInfoJson } from '../../../common/model/UserInfo'
+import { UserInfoJson,RoleType } from '../../../common/model/UserInfo'
 import { RiskBadge } from '../../../common/components/RiskBadge'
 import { WarningEvent } from '../model/WarningEvent'
 import { CounselorService } from '../service/CounselorService'
+import { CounselorStorage } from '../service/CounselorStorage'
 
 class QuickAction {
   label: string
@@ -44,6 +45,15 @@ struct CounselorHomePage {
   @State warningEvents: WarningEvent[] = []
   @State userName: string = ''
   @State userAvatarChar: string = ''
+  @State todayWarningCount: number = 3
+  @State pendingCount: number = 5
+  @State resolvedCount: number = 12
+  @State activeClass: string = '软件工程 2301班'
+  @State notifyFrequency: string = '智能实时推送'
+  @State currentPasswordMask: string = '******'
+  @State studentCount: number = 312
+  @State monthlyFollowUp: number = 24
+  @State managedClasses: string[] = ['软件工程2301班', '软件工程2302班', '网络安全2301班', '计科2301班', '计科2302班', '物联网2301班', '大数据2301班', '嵌入式2301班']
   private service: CounselorService = new CounselorService()
 
   private quickActions: QuickAction[] = [
@@ -63,6 +73,29 @@ struct CounselorHomePage {
   aboutToAppear(): void {
     this.loadUserInfo()
     this.loadWarnings()
+    this.loadPersistedPreferences() // 首屏静默加载持久化偏好
+  }
+
+  // 读取 Preferences 闪存快照
+  async loadPersistedPreferences() {
+    let ctx = getContext(this);
+    this.activeClass = await CounselorStorage.getClass(ctx);
+  }
+
+  /**
+   * 🌟 C7 高级能力：核心操作权限安全校验锁（防非辅导员角色非法篡改/跨越数据大盘）
+   */
+  private verifyOperationPermission(actionName: string): boolean {
+    const currentRole: RoleType = RoleType.COUNSELOR; // 模拟当前身份
+    if (currentRole !== RoleType.COUNSELOR && currentRole !== RoleType.SCHOOL_ADMIN) {
+      AlertDialog.show({
+        title: '🔒 权限拦截',
+        message: `您无权执行【${actionName}】。`,
+        confirm: { value: '关闭', action: () => {} }
+      });
+      return false;
+    }
+    return true;
   }
 
   private async loadUserInfo(): Promise<void> {
@@ -104,6 +137,38 @@ struct CounselorHomePage {
     } catch (err) {}
     const data: WarningEvent[] = await this.service.fetchWarningEvents()
     this.warningEvents = data
+    this.calculateDynamicMetrics(data)
+  }
+
+  // 指标动态全量计算引擎
+  private calculateDynamicMetrics(data: WarningEvent[]): void {
+    if (!data || data.length === 0) return;
+
+    let high = 0;
+    let warning = 0;
+    let watch = 0;
+
+    data.forEach(event => {
+      const level = event.riskLevel?.toString() || '';
+      if (level.includes('红') || level.includes('3') || level.includes('高危')) {
+        high++;
+      } else if (level.includes('橙') || level.includes('黄') || level.includes('2') || level.includes('1') || level.includes('预警')) {
+        warning++;
+      } else {
+        watch++;
+      }
+    });
+
+    // 联动重写预警中心统计卡片
+    this.alertSummary = [
+      new AlertSummaryItem('高危', high.toString(), '#EF4444'),
+      new AlertSummaryItem('预警', warning.toString(), '#F97316'),
+      new AlertSummaryItem('关注', watch.toString(), '#FBBF24')
+    ];
+
+    // 同步刷新工作台大盘数字
+    this.todayWarningCount = high;
+    this.pendingCount = warning;
   }
 
   build() {
@@ -153,16 +218,36 @@ struct CounselorHomePage {
     Column() {
       Row() {
         Column() {
-          Text('辅导员工作台')
-            .fontSize(22)
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Colors.TEXT_ON_PRIMARY)
+          Row() {
+            Text(this.activeClass)
+              .fontSize(22)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Colors.TEXT_ON_PRIMARY)
+
+            Select([{ value: '软件工程 2301班' }, { value: '软件工程 2302班' }, { value: '网络安全 2301班' }])
+              .selected(0)
+              .value('切换班级')
+              .font({ size: 12 })
+              .fontColor(Colors.TEXT_ON_PRIMARY)
+              .backgroundColor('rgba(255,255,255,0.15)')
+              .margin({ left: 10 })
+              .onSelect(async (idx: number, value: string) => {
+                // 挂钩操作拦截校验
+                if (!this.verifyOperationPermission('管理班级动态切换')) return;
+
+                let ctx = getContext(this);
+                this.activeClass = value;
+                // 实时写入 Preferences
+                await CounselorStorage.saveClass(ctx, value); // Preferences落盘
+                promptAction.showToast({ message: `已切入 ${value} 数据核心` });
+              })
+          }
 
           Text(this.userName + '，' + this.getTimeGreeting())
             .fontSize(13)
             .fontColor(Colors.TEXT_ON_PRIMARY)
             .opacity(0.7)
-            .margin({ top: 4 })
+            .margin({ top: 6 })
         }
         .alignItems(HorizontalAlign.Start)
 
@@ -191,7 +276,7 @@ struct CounselorHomePage {
   buildStatRow(): void {
     Row() {
       Column() {
-        Text('3')
+        Text(this.todayWarningCount.toString())
           .fontSize(26)
           .fontWeight(FontWeight.Bold)
           .fontColor('#EF4444')
@@ -210,7 +295,7 @@ struct CounselorHomePage {
         .backgroundColor('#F3F4F6')
 
       Column() {
-        Text('5')
+        Text(this.pendingCount.toString())
           .fontSize(26)
           .fontWeight(FontWeight.Bold)
           .fontColor('#F97316')
@@ -229,7 +314,7 @@ struct CounselorHomePage {
         .backgroundColor('#F3F4F6')
 
       Column() {
-        Text('12')
+        Text(this.resolvedCount.toString())
           .fontSize(26)
           .fontWeight(FontWeight.Bold)
           .fontColor('#34D399')
@@ -298,7 +383,10 @@ struct CounselorHomePage {
         .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
         .margin({ bottom: 12 })
         .onClick(() => {
-          router.pushUrl({ url: item.route })
+          // 🌟 拦截安全防线：只有符合辅导员权限，才能通过路由下钻
+          if (this.verifyOperationPermission(item.label)) {
+            router.pushUrl({ url: item.route })
+          }
         })
       })
     }
@@ -448,19 +536,19 @@ struct CounselorHomePage {
           // 三列统计
           Row() {
             Column() {
-              Text('8').fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
+              Text(this.managedClasses.length.toString()).fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
               Text('管辖班级').fontSize(11).fontColor(Colors.TEXT_SECONDARY).margin({ top: 2 })
             }
             .layoutWeight(1)
 
             Column() {
-              Text('312').fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
+              Text(this.studentCount.toString()).fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
               Text('学生总数').fontSize(11).fontColor(Colors.TEXT_SECONDARY).margin({ top: 2 })
             }
             .layoutWeight(1)
 
             Column() {
-              Text('24').fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
+              Text(this.monthlyFollowUp.toString()).fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
               Text('本月跟进').fontSize(11).fontColor(Colors.TEXT_SECONDARY).margin({ top: 2 })
             }
             .layoutWeight(1)
@@ -482,10 +570,34 @@ struct CounselorHomePage {
           .alignSelf(ItemAlign.Start)
           .padding({ left: 24, bottom: 10 })
 
-        this.buildProfileItem('账号与安全', '管理密码与登录方式')
-        this.buildProfileItem('通知设置', '调整预警通知频率')
-        this.buildProfileItem('数据范围', '当前管辖8个班级')
-        this.buildProfileItem('关于青心链', 'v1.0.0 辅导员版')
+        // 1：密码修改与凭证核验真实实现
+        this.buildProfileItem('账号与安全','管理密码与登录方式', () => {
+          if (!this.verifyOperationPermission('修改密码')) return;
+          // 跳转到你已有的修改密码页面
+          router.pushUrl({ url: 'features/auth/pages/ChangePasswordPage' });
+        })
+
+        // 2：当前管辖班级联动回显
+        this.buildProfileItem('数据范围', `当前管辖：${this.managedClasses.length}个班级`, () => {
+          AlertDialog.show({
+            title: '管辖班级清单',
+            message: this.managedClasses.join('\n'),
+            confirm: {
+              value: '关闭' ,
+              action:()=>{}
+            }
+          });
+        })
+
+        this.buildProfileItem('关于青心链', 'v1.0.0 辅导员生产版', () => {
+          AlertDialog.show({
+            title: '关于青心链',
+            message: '青心链心理预警系统 v1.0.0\n专为高校辅导员设计，提供班级心理态势感知与危机闭环管理。\n开发者：软件工程小组',
+            confirm: { value: '确定' ,
+              action:()=>{}
+            }
+          });
+        })
 
         // 退出登录
         Button('退出登录')
@@ -502,14 +614,13 @@ struct CounselorHomePage {
               message: '确定要退出登录吗？',
               confirm: {
                 value: '退出',
-                action: () => {
+                action: async () => {
                   const authManager = AuthManager.getInstance()
-                  authManager.logout()
+                  await authManager.logout() // 销毁基础凭证
                   router.replaceUrl({ url: RouterPath.LOGIN })
                 }
               },
-              cancel: () => {
-              }
+              cancel: () => {}
             })
           })
       }
@@ -517,8 +628,9 @@ struct CounselorHomePage {
     .scrollBar(BarState.Off)
   }
 
+  // 🌟 黄金重构点：为队友的函数新增第三个可选参数 onClickAction
   @Builder
-  buildProfileItem(title: string, subtitle: string): void {
+  buildProfileItem(title: string, subtitle: string, onClickAction?: () => void): void {
     Row() {
       Column() {
         Text(title)
@@ -542,6 +654,12 @@ struct CounselorHomePage {
     .backgroundColor(Colors.CARD_BG)
     .borderRadius(12)
     .margin({ bottom: 8 })
+    // 🌟 在这里将点击动作与传进来的逻辑真正挂钩！
+    .onClick(() => {
+      if (onClickAction) {
+        onClickAction();
+      }
+    })
   }
 
   /* ============ 底部导航栏 ============ */

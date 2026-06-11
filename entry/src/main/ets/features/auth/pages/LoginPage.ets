@@ -78,9 +78,12 @@ struct LoginPage {
 
         const userInfo = new UserInfo()
         userInfo.uid = this.account
-        userInfo.roleType = this.selectedRole
         userInfo.name = result.studentName.length > 0 ? result.studentName : this.account
-        await authManager.saveUserInfo(JSON.stringify(userInfo.toJson()))
+        userInfo.roleType = this.selectedRole
+
+        await authManager.onLoginSuccess(this.account, result.studentName, this.selectedRole);
+        const jsonString = JSON.stringify(userInfo);
+        console.info(`[DEBUG] Attempting to save: ${jsonString}`);
         authManager.setUserName(userInfo.name)
 
         const welcomeMsg = result.studentName.length > 0 ?

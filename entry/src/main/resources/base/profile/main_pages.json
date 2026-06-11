@@ -15,6 +15,7 @@
     "features/counselor/pages/CounselorHomePage",
     "features/counselor/pages/HeatmapPage",
     "features/counselor/pages/WarningTimelinePage",
-    "features/school/pages/SchoolHomePage"
+    "features/school/pages/SchoolHomePage",
+    "features/auth/pages/ChangePasswordPage"
   ]
 }

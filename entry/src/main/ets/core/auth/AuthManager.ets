@@ -6,23 +6,45 @@ const KEY_USER_INFO = 'user_info'
 const KEY_REMEMBER_ME = 'remember_me'
 const KEY_LOGIN_ACCOUNT = 'login_account'
 
+interface UserInfo {
+  uid: string;
+  name: string;
+  roleType: number;
+}
+
 export class AuthManager {
   private static instance: AuthManager
   private accessToken: string = ''
   private refreshToken: string = ''
   private isLoggedIn: boolean = false
   private userName: string = ''
+  private uid: string = ''
+
+  getUid(): string {
+    return this.uid
+  }
 
   static getInstance(): AuthManager {
     if (!AuthManager.instance) {
-      AuthManager.instance = new AuthManager()
+      AuthManager.instance = new AuthManager();
     }
-    return AuthManager.instance
+    return AuthManager.instance;
   }
 
   async restoreSession(): Promise<boolean> {
     const token = await getString(KEY_ACCESS_TOKEN, '')
     const rememberMe = await getBoolean(KEY_REMEMBER_ME, false)
+    const userInfo = await getString(KEY_USER_INFO, '')
+    console.info(`[DEBUG] RestoreSession - token: ${token}, userInfo: ${userInfo}`);
+    if (userInfo.length > 0) {
+      try {
+        const info = JSON.parse(userInfo) as UserInfo;
+        this.uid = info.uid || ''
+        console.info(`[DEBUG] Session restored, UID is: ${this.uid}`);
+      } catch (e) {console.error('Session restore: JSON parse error', e);}
+    }else {
+      console.warn("Session restore: user_info is empty in storage.");
+    }
     if (token.length > 0 || rememberMe) {
       this.accessToken = token
       this.refreshToken = await getString(KEY_REFRESH_TOKEN, '')
@@ -80,10 +102,24 @@ export class AuthManager {
 
   async saveUserInfo(userInfoJson: string): Promise<void> {
     await putString(KEY_USER_INFO, userInfoJson)
+    try {
+      const info = JSON.parse(userInfoJson) as UserInfo;
+      this.uid = info.uid || ''
+    } catch (e) {
+      console.error('Failed to parse userInfo for UID', e)
+    }
   }
 
   async getUserInfoJson(): Promise<string> {
-    return await getString(KEY_USER_INFO, '')
+    return await getString(KEY_USER_INFO, '');
+  }
+
+  async onLoginSuccess(uid: string, name: string, role: number): Promise<void> {
+    const info: UserInfo = { uid: uid, name: name, roleType: role };
+    this.uid = uid;
+    this.userName = name;
+    await putString(KEY_USER_INFO, JSON.stringify(info));
+    console.info(`[SUCCESS] AuthManager saved UID: ${uid}`);
   }
 
   setUserName(name: string): void {

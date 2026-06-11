@@ -1,7 +1,8 @@
 export enum RoleType {
   STUDENT = 0,
   COUNSELOR = 1,
-  SCHOOL_PSY_CENTER = 2
+  SCHOOL_PSY_CENTER = 2,
+  SCHOOL_ADMIN = 3
 }
 
 export interface UserInfoJson {
