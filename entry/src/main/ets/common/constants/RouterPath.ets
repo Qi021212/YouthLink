@@ -7,7 +7,6 @@ export class RouterPath {
   static readonly ATTENTION = 'features/student/pages/AttentionPage'
   static readonly RHYTHM = 'features/student/pages/RhythmPage'
   static readonly MOOD_CHECK_IN = 'features/student/pages/MoodCheckInPage'
-  static readonly WAVEFORM = 'features/student/pages/WaveformPage'
   static readonly SEMI_MONTHLY = 'features/student/pages/SemiMonthlyPage'
   static readonly APPOINTMENT = 'features/student/pages/AppointmentPage'
   static readonly ACTIVITY = 'features/student/pages/ActivityPage'
@@ -19,4 +18,5 @@ export class RouterPath {
   static readonly HEATMAP = 'features/counselor/pages/HeatmapPage'
   static readonly WARNING_TIMELINE = 'features/counselor/pages/WarningTimelinePage'
   static readonly SCHOOL_HOME = 'features/school/pages/SchoolHomePage'
+
 }
