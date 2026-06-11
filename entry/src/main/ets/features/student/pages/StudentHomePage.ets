@@ -327,10 +327,9 @@ struct StudentHomePage {
             .borderRadius(14)
             .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
             .margin({ bottom: 24 })
-            // .onClick(() => {
-            //   // 跳转到日常记录页面
-            //   router.pushUrl({ url: RouterPath.DAILY_RECORD })
-            // })
+            .onClick(() => {
+              router.pushUrl({ url: RouterPath.MOOD_CHECK_IN })
+            })
 
             // 快捷入口标题
             Text('快捷功能')
