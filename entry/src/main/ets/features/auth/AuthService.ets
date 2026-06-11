@@ -3,6 +3,8 @@ import { RoleType } from '../../common/model/UserInfo'
 import { DatabaseHelper } from '../../common/utils/DatabaseHelper'
 
 const SIMULATED_DELAY = 800
+const TABLE_COUNSELORS = 'counselors'
+const TABLE_SCHOOL_CENTER = 'school_center'
 
 interface TokenHeader {
   alg: string
@@ -68,15 +70,14 @@ export class AuthService {
       return result
     }
 
-    if (roleType === RoleType.STUDENT) {
-      const dbResult = await this.tryDatabaseLogin(account, password)
-      if (dbResult !== null) {
-        return dbResult
-      }
+    // 尝试数据库登录（按选定角色查对应表）
+    const dbResult = await this.tryDatabaseLogin(account, password, roleType)
+    if (dbResult !== null) {
+      return dbResult
     }
 
+    // Mock 兜底
     const success = this.validateCredentials(account, password, roleType)
-
     if (success) {
       this.loginFailCount.set(account, 0)
       result.authStatus = true
@@ -85,53 +86,70 @@ export class AuthService {
       result.jumpPath = this.getJumpPath(roleType)
       result.studentName = this.getMockName(account)
       return result
-    } else {
-      const failCount = (this.loginFailCount.get(account) || 0) + 1
-      this.loginFailCount.set(account, failCount)
+    }
 
-      if (failCount >= this.MAX_FAIL_COUNT) {
-        this.lockedAccounts.set(account, Date.now())
-        result.authStatus = false
-        result.errorCode = 1002
-        result.errorMsg = '账号已被锁定，请15分钟后再试'
-        return result
-      }
+    const failCount = (this.loginFailCount.get(account) || 0) + 1
+    this.loginFailCount.set(account, failCount)
 
+    if (failCount >= this.MAX_FAIL_COUNT) {
+      this.lockedAccounts.set(account, Date.now())
       result.authStatus = false
-      result.errorCode = 1001
-      result.errorMsg = '用户名或密码错误'
+      result.errorCode = 1002
+      result.errorMsg = '账号已被锁定，请15分钟后再试'
       return result
     }
+
+    result.authStatus = false
+    result.errorCode = 1001
+    result.errorMsg = '用户名或密码错误'
+    return result
   }
 
-  private async tryDatabaseLogin(uid: string, password: string): Promise<AuthResult | null> {
+  private async tryDatabaseLogin(uid: string, password: string, roleType: RoleType): Promise<AuthResult | null> {
     try {
       const dbHelper = DatabaseHelper.getInstance()
-      const student = await dbHelper.validateLogin(uid, password)
-      if (student !== null) {
-        const result = new AuthResult()
-        result.authStatus = true
-        result.accessToken = this.generateMockToken(uid, RoleType.STUDENT)
-        result.refreshToken = this.generateMockRefreshToken(uid)
-        result.jumpPath = this.getJumpPath(RoleType.STUDENT)
-        result.studentName = student.name
-        this.loginFailCount.set(uid, 0)
-        return result
+
+      if (roleType === RoleType.STUDENT) {
+        const student = await dbHelper.validateLogin(uid, password)
+        if (student !== null) {
+          return this.buildDbSuccess(uid, student.name, RoleType.STUDENT)
+        }
+      }
+
+      if (roleType === RoleType.COUNSELOR) {
+        const staff = await dbHelper.validateStaffLogin(TABLE_COUNSELORS, uid, password)
+        if (staff !== null) {
+          return this.buildDbSuccess(uid, staff.name, RoleType.COUNSELOR)
+        }
+      }
+
+      if (roleType === RoleType.SCHOOL_PSY_CENTER) {
+        const staff = await dbHelper.validateStaffLogin(TABLE_SCHOOL_CENTER, uid, password)
+        if (staff !== null) {
+          return this.buildDbSuccess(uid, staff.name, RoleType.SCHOOL_PSY_CENTER)
+        }
       }
     } catch (err) {
     }
     return null
   }
 
+  private buildDbSuccess(uid: string, name: string, roleType: RoleType): AuthResult {
+    const result = new AuthResult()
+    result.authStatus = true
+    result.accessToken = this.generateMockToken(uid, roleType)
+    result.refreshToken = this.generateMockRefreshToken(uid)
+    result.jumpPath = this.getJumpPath(roleType)
+    result.studentName = name
+    this.loginFailCount.set(uid, 0)
+    return result
+  }
+
   private validateCredentials(account: string, password: string, roleType: RoleType): boolean {
-    if (account === 'demo' && password === '123456') {
-      return true
-    }
     const mockAccounts: Record<string, [string, RoleType]> = {
       '2024001': ['123456', RoleType.STUDENT],
       'T10001': ['123456', RoleType.COUNSELOR],
-      'A10001': ['123456', RoleType.SCHOOL_ADMIN],
-      'C10001': ['123456', RoleType.CONSULTANT],
+      'A10001': ['123456', RoleType.SCHOOL_PSY_CENTER]
     }
     const record = mockAccounts[account]
     if (record && record[0] === password && record[1] === roleType) {
@@ -143,10 +161,8 @@ export class AuthService {
   private getMockName(account: string): string {
     const names: Record<string, string> = {
       '2024001': '测试同学',
-      'demo': '演示用户',
       'T10001': '王老师',
-      'A10001': '李主任',
-      'C10001': '咨询师陈',
+      'A10001': '李主任'
     }
     return names[account] || ''
   }
@@ -168,10 +184,8 @@ export class AuthService {
         return 'features/student/pages/StudentHomePage'
       case RoleType.COUNSELOR:
         return 'features/counselor/pages/CounselorHomePage'
-      case RoleType.SCHOOL_ADMIN:
+      case RoleType.SCHOOL_PSY_CENTER:
         return 'features/school/pages/SchoolHomePage'
-      case RoleType.CONSULTANT:
-        return 'features/consultant/pages/ConsultantHomePage'
       default:
         return 'features/student/pages/StudentHomePage'
     }

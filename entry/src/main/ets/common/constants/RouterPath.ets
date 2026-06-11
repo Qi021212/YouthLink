@@ -14,5 +14,9 @@ export class RouterPath {
   static readonly PROFILE = 'features/student/pages/ProfilePage'
   static readonly PORTRAIT_RESULT = 'features/student/pages/PortraitResultPage'
   static readonly CALM_WAVE = 'features/student/pages/CalmWavePage'
-  static readonly ROOM_BOOKING ='features/student/pages/RoomBookingPage'
+  static readonly ROOM_BOOKING = 'features/student/pages/RoomBookingPage'
+  static readonly COUNSELOR_HOME = 'features/counselor/pages/CounselorHomePage'
+  static readonly HEATMAP = 'features/counselor/pages/HeatmapPage'
+  static readonly WARNING_TIMELINE = 'features/counselor/pages/WarningTimelinePage'
+  static readonly SCHOOL_HOME = 'features/school/pages/SchoolHomePage'
 }

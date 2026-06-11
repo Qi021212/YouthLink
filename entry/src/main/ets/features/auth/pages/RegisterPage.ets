@@ -1,13 +1,27 @@
 import { promptAction, router } from '@kit.ArkUI'
 import { common } from '@kit.AbilityKit'
 import { Colors } from '../../../common/constants/Colors'
+import { RoleType } from '../../../common/model/UserInfo'
 import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
+
+class RoleTab {
+  label: string
+  roleType: RoleType
+
+  constructor(label: string, roleType: RoleType) {
+    this.label = label
+    this.roleType = roleType
+  }
+}
+
+const TABLE_COUNSELORS = 'counselors'
+const TABLE_SCHOOL_CENTER = 'school_center'
 
 @Entry
 @Component
 struct RegisterPage {
-  @State studentId: string = ''
-  @State studentName: string = ''
+  @State uid: string = ''
+  @State name: string = ''
   @State password: string = ''
   @State confirmPassword: string = ''
   @State captchaInput: string = ''
@@ -16,9 +30,25 @@ struct RegisterPage {
   @State isConfirmVisible: boolean = false
   @State isLoading: boolean = false
   @State isAgreementChecked: boolean = false
+  @State selectedRoleType: RoleType = RoleType.STUDENT
+  @State uidPlaceholder: string = '请输入学号（6~20位）'
+
+  private roleTabs: RoleTab[] = [
+    new RoleTab('学生', RoleType.STUDENT),
+    new RoleTab('辅导员', RoleType.COUNSELOR),
+    new RoleTab('校级心理中心', RoleType.SCHOOL_PSY_CENTER)
+  ]
 
   aboutToAppear(): void {
     this.generateCaptcha()
+  }
+
+  updatePlaceholder(): void {
+    if (this.selectedRoleType === RoleType.STUDENT) {
+      this.uidPlaceholder = '请输入学号（6~20位）'
+    } else {
+      this.uidPlaceholder = '请输入工号（6~20位）'
+    }
   }
 
   generateCaptcha(): void {
@@ -31,16 +61,28 @@ struct RegisterPage {
     this.captchaCode = code
   }
 
+  getTableNameForRole(): string {
+    if (this.selectedRoleType === RoleType.COUNSELOR) {
+      return TABLE_COUNSELORS
+    }
+    if (this.selectedRoleType === RoleType.SCHOOL_PSY_CENTER) {
+      return TABLE_SCHOOL_CENTER
+    }
+    return ''
+  }
+
   async onRegister(): Promise<void> {
-    if (!this.studentId.trim()) {
-      promptAction.showToast({ message: '请输入学号', duration: 2000 })
+    if (!this.uid.trim()) {
+      const label = this.selectedRoleType === RoleType.STUDENT ? '学号' : '工号'
+      promptAction.showToast({ message: `请输入${label}`, duration: 2000 })
       return
     }
-    if (this.studentId.trim().length < 6 || this.studentId.trim().length > 20) {
-      promptAction.showToast({ message: '学号长度6~20位', duration: 2000 })
+    if (this.uid.trim().length < 6 || this.uid.trim().length > 20) {
+      const label = this.selectedRoleType === RoleType.STUDENT ? '学号' : '工号'
+      promptAction.showToast({ message: `${label}长度6~20位`, duration: 2000 })
       return
     }
-    if (!this.studentName.trim()) {
+    if (!this.name.trim()) {
       promptAction.showToast({ message: '请输入姓名', duration: 2000 })
       return
     }
@@ -85,11 +127,23 @@ struct RegisterPage {
         }
       }
 
-      const success = await dbHelper.registerStudent(
-        this.studentId.trim(),
-        this.studentName.trim(),
-        this.password
-      )
+      let success = false
+
+      if (this.selectedRoleType === RoleType.STUDENT) {
+        success = await dbHelper.registerStudent(
+          this.uid.trim(),
+          this.name.trim(),
+          this.password
+        )
+      } else {
+        const tableName = this.getTableNameForRole()
+        success = await dbHelper.registerStaff(
+          tableName,
+          this.uid.trim(),
+          this.name.trim(),
+          this.password
+        )
+      }
 
       if (success) {
         promptAction.showToast({ message: '注册成功，请登录', duration: 2000 })
@@ -97,7 +151,8 @@ struct RegisterPage {
           router.back()
         }, 1500)
       } else {
-        promptAction.showToast({ message: '该学号已被注册', duration: 2500 })
+        const label = this.selectedRoleType === RoleType.STUDENT ? '该学号' : '该工号'
+        promptAction.showToast({ message: `${label}已被注册`, duration: 2500 })
       }
     } catch (err) {
       promptAction.showToast({ message: '注册失败，请稍后重试', duration: 2500 })
@@ -133,19 +188,38 @@ struct RegisterPage {
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ left: 32, bottom: 28 })
+      .padding({ left: 32, bottom: 12 })
+
+      // 角色选择 Tab
+      Row() {
+        ForEach(this.roleTabs, (item: RoleTab) => {
+          Text(item.label)
+            .fontSize(14)
+            .fontColor(this.selectedRoleType === item.roleType ? Colors.TEXT_ON_PRIMARY : Colors.TEXT_SECONDARY)
+            .padding({ left: 20, right: 20, top: 10, bottom: 10 })
+            .borderRadius(22)
+            .backgroundColor(this.selectedRoleType === item.roleType ? Colors.PRIMARY : Colors.SURFACE)
+            .margin({ right: 10 })
+            .onClick(() => {
+              this.selectedRoleType = item.roleType
+              this.updatePlaceholder()
+            })
+        })
+      }
+      .width('100%')
+      .padding({ left: 32, bottom: 24 })
 
       Column() {
         Row() {
-          TextInput({ placeholder: '请输入学号（6~20位）', text: this.studentId })
+          TextInput({ placeholder: this.uidPlaceholder, text: this.uid })
             .placeholderColor(Colors.TEXT_HINT)
             .fontSize(16)
             .layoutWeight(1)
             .backgroundColor(Color.Transparent)
-            .type(InputType.Number)
+            .type(InputType.Normal)
             .maxLength(20)
             .onChange((value: string) => {
-              this.studentId = value
+              this.uid = value
             })
         }
         .width('100%')
@@ -156,7 +230,7 @@ struct RegisterPage {
         .margin({ bottom: 16 })
 
         Row() {
-          TextInput({ placeholder: '请输入真实姓名', text: this.studentName })
+          TextInput({ placeholder: '请输入真实姓名', text: this.name })
             .placeholderColor(Colors.TEXT_HINT)
             .fontSize(16)
             .layoutWeight(1)
@@ -164,7 +238,7 @@ struct RegisterPage {
             .type(InputType.Normal)
             .maxLength(20)
             .onChange((value: string) => {
-              this.studentName = value
+              this.name = value
             })
         }
         .width('100%')
