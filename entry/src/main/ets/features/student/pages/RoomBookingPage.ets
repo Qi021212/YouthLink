@@ -1,98 +1,8 @@
-// features/student/pages/RoomBookingPage.ets
 import { router, promptAction } from '@kit.ArkUI';
 import { DateUtil } from '../../../common/utils/DateUtil';
 import { getString, putObject } from '../../../common/utils/StorageUtil';
-
-// ================= 数据模型 =================
-
-interface ConsultantShiftDTO {
-  id: string;
-  room: string;
-  slot: string;
-  consultantId: string;
-  consultantName: string;
-}
-
-interface BookingDTO {
-  id: string;
-  name: string;
-  clazz: string;
-  dorm: string;
-  room: string;
-  slot: string;
-  date: Date;
-  consultantId: string;
-  consultantName: string;
-}
-
-interface ConsultantInfo {
-  id: string;
-  name: string;
-}
-
-interface ReminderData {
-  id: string;
-  date: string;
-  room: string;
-  slot: string;
-  consultantName: string;
-  name: string;
-}
-
-// ================= 假数据模拟 =================
-
-class FakeBackend {
-  private static shifts: ConsultantShiftDTO[] = [];
-  private static bookings: BookingDTO[] = [];
-
-  static initMockData(): void {
-    const rooms: string[] = ['辅导室A', '辅导室B', '辅导室C'];
-    const slots: string[] = ['09:00-10:00', '10:00-11:00', '14:00-15:00', '15:00-16:00', '19:00-20:00'];
-    const consultants: ConsultantInfo[] = [
-      { id: 'c1', name: '张老师' },
-      { id: 'c2', name: '李老师' },
-      { id: 'c3', name: '王老师' }
-    ];
-
-    FakeBackend.shifts = [];
-    for (const room of rooms) {
-      for (const slot of slots) {
-        const consultant: ConsultantInfo = consultants[Math.floor(Math.random() * consultants.length)];
-        const shift: ConsultantShiftDTO = {
-          id: `${room}|${slot}`,
-          room: room,
-          slot: slot,
-          consultantId: consultant.id,
-          consultantName: consultant.name
-        };
-        FakeBackend.shifts.push(shift);
-      }
-    }
-  }
-
-  static async listBookings(): Promise<BookingDTO[]> {
-    await FakeBackend.delay(300);
-    return [...FakeBackend.bookings];
-  }
-
-  static async listConsultantShifts(date: Date): Promise<ConsultantShiftDTO[]> {
-    await FakeBackend.delay(200);
-    return [...FakeBackend.shifts];
-  }
-
-  static async createBooking(booking: BookingDTO): Promise<void> {
-    await FakeBackend.delay(500);
-    FakeBackend.bookings.push(booking);
-  }
-
-  private static delay(ms: number): Promise<void> {
-    return new Promise<void>((resolve: () => void) => {
-      setTimeout(() => {
-        resolve();
-      }, ms);
-    });
-  }
-}
+import { BookingService } from '../service/BookingService';
+import { BookingDTO, ConsultantShiftDTO, ConsultantInfo, ReminderData } from '../model/BookingModel';
 
 // ================= 工具函数 =================
 
@@ -175,12 +85,10 @@ function findShift(shifts: ConsultantShiftDTO[], room: string, slot: string): Co
   return undefined;
 }
 
-// 检查时间段是否可预约（有排班且未被占用）
 function isAvailable(shift: ConsultantShiftDTO | undefined, occupied: Map<string, BookingDTO>): boolean {
   return shift !== undefined && !occupied.has(shift.id);
 }
 
-// 计算可预约数量
 function getAvailableCount(shifts: ConsultantShiftDTO[], occupied: Map<string, BookingDTO>): number {
   let count: number = 0;
   for (const shift of shifts) {
@@ -196,12 +104,10 @@ function getAvailableCount(shifts: ConsultantShiftDTO[], occupied: Map<string, B
 @Entry
 @Component
 struct RoomBookingPage {
-  // 表单数据
   @State studentName: string = '';
   @State studentClass: string = '';
   @State studentDorm: string = '';
 
-  // 状态变量
   @State selectedDate: Date = new Date();
   @State selectedShift: ConsultantShiftDTO | null = null;
   @State isLoading: boolean = true;
@@ -215,9 +121,10 @@ struct RoomBookingPage {
     '09:00-10:00', '10:00-11:00', '14:00-15:00', '15:00-16:00', '19:00-20:00'
   ];
   private readonly nextVisitKey: string = 'next_visit_reminder';
+  private bookingService: BookingService = BookingService.getInstance();
 
-  aboutToAppear(): void {
-    FakeBackend.initMockData();
+  async aboutToAppear(): Promise<void> {
+    await this.bookingService.init(getContext(this));
     this.loadStudentInfo();
     this.loadAllData();
   }
@@ -245,18 +152,19 @@ struct RoomBookingPage {
   async loadAllData(): Promise<void> {
     this.isLoading = true;
     try {
-      const bookings: BookingDTO[] = await FakeBackend.listBookings();
-      const shifts: ConsultantShiftDTO[] = await FakeBackend.listConsultantShifts(this.selectedDate);
+      const bookings: BookingDTO[] = await this.bookingService.getBookings();
+      const shifts: ConsultantShiftDTO[] = await this.bookingService.getConsultantShifts(this.selectedDate);
       this.bookings = bookings;
       this.shifts = shifts;
       this.selectedShift = null;
     } catch (e) {
       console.error('加载数据失败', JSON.stringify(e));
+      this.bookings = [];
+      this.shifts = [];
     } finally {
-      this.isLoading = false;
+      this.isLoading = false;  // 只有数据加载完才设为 false
     }
   }
-
   async submitBooking(): Promise<void> {
     if (this.selectedShift === null) {
       promptAction.showToast({ message: '请先选择预约时段' });
@@ -288,8 +196,8 @@ struct RoomBookingPage {
 
     this.isSubmitting = true;
     try {
-      await FakeBackend.createBooking(newBooking);
-      await this.persistReminder(newBooking);
+      await this.bookingService.createBooking(newBooking);
+      await this.bookingService.saveReminder(newBooking);
       await this.loadAllData();
       promptAction.showToast({ message: '预约成功' });
     } catch (e) {
@@ -300,20 +208,26 @@ struct RoomBookingPage {
     }
   }
 
-  async persistReminder(booking: BookingDTO): Promise<void> {
-    try {
-      const reminder: ReminderData = {
-        id: booking.id,
-        date: booking.date.toISOString(),
-        room: booking.room,
-        slot: booking.slot,
-        consultantName: booking.consultantName,
-        name: booking.name
-      };
-      await putObject(this.nextVisitKey, reminder);
-    } catch (e) {
-      console.error('保存提醒失败', JSON.stringify(e));
-    }
+  // 取消预约
+  async cancelBooking(bookingId: string): Promise<void> {
+    AlertDialog.show({
+      title: '取消预约',
+      message: '确定要取消这个预约吗？',
+      confirm: {
+        value: '确定',
+        action: async () => {
+          try {
+            await this.bookingService.cancelBooking(bookingId);
+            await this.loadAllData();
+            promptAction.showToast({ message: '取消预约成功' });
+          } catch (e) {
+            console.error('取消预约失败', JSON.stringify(e));
+            promptAction.showToast({ message: '取消预约失败' });
+          }
+        }
+      },
+      cancel: () => {}
+    });
   }
 
   build() {
@@ -418,7 +332,7 @@ struct RoomBookingPage {
             end: maxDate,
             onAccept: (value: DatePickerResult) => {
               const year: number = value.year ?? this.selectedDate.getFullYear();
-              const month: number = (value.month ?? this.selectedDate.getMonth() + 1) - 1;
+              const month: number = (value.month !== undefined) ? value.month: this.selectedDate.getMonth();
               const day: number = value.day ?? this.selectedDate.getDate();
               this.selectedDate = new Date(year, month, day);
               this.loadAllData();
@@ -494,12 +408,16 @@ struct RoomBookingPage {
         Text(findShift(this.shifts, room, slot)?.consultantName ?? '无排班')
           .fontSize(10)
           .fontColor(
-            findShift(this.shifts, room, slot) !== undefined &&
+            this.selectedShift !== null &&
+              findShift(this.shifts, room, slot) !== undefined &&
+              this.selectedShift!.id === findShift(this.shifts, room, slot)!.id
+              ? '#FFFFFF'
+              : findShift(this.shifts, room, slot) !== undefined &&
               getOccupiedMap(this.bookings, this.shifts, this.selectedDate).has(findShift(this.shifts, room, slot)!.id)
               ? '#FF6B6B'
               : findShift(this.shifts, room, slot) !== undefined
-              ? '#4CAF50'
-              : '#999999'
+                ? '#4CAF50'
+                : '#999999'
           )
       }
       .padding({ top: 8, bottom: 8 })
@@ -610,6 +528,8 @@ struct RoomBookingPage {
     .shadow({ radius: 8, color: '#1A000000' })
   }
 
+  // RoomBookingPage.ets - 修改 ListCard 方法
+
   @Builder
   ListCard() {
     Column({ space: 12 }) {
@@ -630,27 +550,45 @@ struct RoomBookingPage {
           .fontColor('#999999')
           .padding(16)
       } else {
-        ForEach(getTodayBookings(this.bookings, this.selectedDate), (booking: BookingDTO) => {
-          Row() {
-            Image($r('app.media.event_available'))
-              .width(20)
-              .height(20)
-              .margin({ right: 12 })
+        List({ space: 10 }) {
+          ForEach(getTodayBookings(this.bookings, this.selectedDate), (booking: BookingDTO) => {
+            ListItem() {
+              Row() {
+                Image($r('app.media.event_available'))
+                  .width(20)
+                  .height(20)
+                  .margin({ right: 12 })
 
-            Column({ space: 2 }) {
-              Text(`${booking.room} · ${booking.slot}`)
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-              Text(`咨询师：${booking.consultantName} · 预约人：${booking.name}`)
-                .fontSize(12)
-                .fontColor('#666666')
+                Column({ space: 2 }) {
+                  Text(`${booking.room} · ${booking.slot}`)
+                    .fontSize(14)
+                    .fontWeight(FontWeight.Medium)
+                  Text(`咨询师：${booking.consultantName} · 预约人：${booking.name}`)
+                    .fontSize(12)
+                    .fontColor('#666666')
+                }
+
+                Blank()
+
+                // 添加取消按钮
+                Button('取消')
+                  .fontSize(12)
+                  .height(32)
+                  .backgroundColor('#FF6B6B')
+                  .borderRadius(16)
+                  .padding({ left: 12, right: 12 })
+                  .onClick(() => {
+                    this.cancelBooking(booking.id);
+                  })
+              }
+              .width('100%')
+              .padding(12)
             }
-
-            Blank()
-          }
-          .width('100%')
-          .padding(12)
-        })
+            .swipeAction({ end: this.getDeleteSwipeAction(booking) }) // 添加左滑删除
+          }, (booking: BookingDTO) => booking.id)
+        }
+        .width('100%')
+        .height(300)
       }
     }
     .width('100%')
@@ -658,6 +596,24 @@ struct RoomBookingPage {
     .backgroundColor('#FFFFFF')
     .borderRadius(12)
     .shadow({ radius: 8, color: '#1A000000' })
+  }
+
+  @Builder
+  getDeleteSwipeAction(booking: BookingDTO) {
+    Row() {
+      Button('删除')
+        .width(80)
+        .height('100%')
+        .backgroundColor('#FF6B6B')
+        .fontColor('#FFFFFF')
+        .fontSize(14)
+        .borderRadius(0)
+        .onClick(() => {
+          this.cancelBooking(booking.id);
+        })
+    }
+    .width(80)
+    .height('100%')
   }
 }
 

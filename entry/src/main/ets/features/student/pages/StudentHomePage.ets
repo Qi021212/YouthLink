@@ -5,6 +5,8 @@ import { AuthManager } from '../../../core/auth/AuthManager'
 import { UserInfoJson } from '../../../common/model/UserInfo'
 import { RiskAlgorithm, ReportSummary } from '../../../common/utils/RiskAlgorithm'
 import { ActivityPage } from './ActivityPage'
+import { BookingHistorySummary } from '../model/BookingModel'
+import { BookingService } from '../service/BookingService'
 
 interface ModuleCard {
   title: string
@@ -21,6 +23,8 @@ struct StudentHomePage {
   @State currentIndex: number = 0
 
   @State historyReports: Array<ReportSummary> = [];
+
+  @State bookingHistoryList: BookingHistorySummary[] = [];
 
   private tabsController: TabsController = new TabsController()
 
@@ -56,13 +60,40 @@ struct StudentHomePage {
     }
   ]
 
+  async loadBookingHistory() {
+    const bookingService = BookingService.getInstance();
+    await bookingService.init(getContext(this));
+    this.bookingHistoryList = await bookingService.getBookingHistoryList();
+    console.info(`加载到 ${this.bookingHistoryList.length} 条预约历史`);
+  }
+
   // 定义一个加载历史的方法，在 aboutToAppear() 或者页面的 onPageShow() 里调用它
   async loadHistoryReports() {
     this.historyReports = await RiskAlgorithm.getHistoryList(getContext(this));
   }
 
-  aaboutToAppear(): void {
-    // 1. 静默触发异步历史报告拉取（不需要在外面写 await）
+  // 格式化时间戳为简短时间显示
+  private formatTimeFromTimestamp(timestamp: number): string {
+    const date: Date = new Date(timestamp);
+    const now: Date = new Date();
+    const today: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const targetDate: Date = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+    const diffDays: number = Math.floor((today.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return '今天';
+    } else if (diffDays === 1) {
+      return '昨天';
+    } else if (diffDays < 7) {
+      return `${diffDays}天前`;
+    } else {
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+  }
+
+  aboutToAppear(): void {
+    // 1. 静默触发异步历史报告拉取
     this.loadHistoryReports();
 
     // 2. 正常的同步状态获取
@@ -70,24 +101,32 @@ struct StudentHomePage {
     const memName = authManager.getUserName();
     if (memName.length > 0) {
       this.userName = memName;
-      return;
+    } else {
+      // 3. 将原本的 await 语句改用原生的 .then() 异步链式调用
+      authManager.getUserInfoJson().then((json: string) => {
+        try {
+          const info: UserInfoJson = JSON.parse(json) as UserInfoJson;
+          if (info.name && info.name.length > 0) {
+            this.userName = info.name;
+            authManager.setUserName(info.name);
+          } else if (info.uid && info.uid.length > 0) {
+            this.userName = info.uid;
+            authManager.setUserName(info.uid);
+          }
+        } catch (err) {
+          console.error('解析缓存用户信息失败:', err);
+        }
+      });
     }
 
-    // 3. 将原本的 await 语句改用原生的 .then() 异步链式调用，规避 async 冲突
-    authManager.getUserInfoJson().then((json: string) => {
-      try {
-        const info: UserInfoJson = JSON.parse(json) as UserInfoJson;
-        if (info.name && info.name.length > 0) {
-          this.userName = info.name;
-          authManager.setUserName(info.name);
-        } else if (info.uid && info.uid.length > 0) {
-          this.userName = info.uid;
-          authManager.setUserName(info.uid);
-        }
-      } catch (err) {
-        console.error('解析缓存用户信息失败:', err);
-      }
-    });
+    // 加载预约历史
+    this.loadBookingHistory();
+  }
+
+  // 添加 onPageShow 方法，每次显示页面时刷新历史记录
+  onPageShow(): void {
+    // 每次回到首页时刷新预约历史
+    this.loadBookingHistory();
   }
 
   onLogout(): void {
@@ -288,10 +327,9 @@ struct StudentHomePage {
             .borderRadius(14)
             .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
             .margin({ bottom: 24 })
-            // .onClick(() => {
-            //   // 跳转到日常记录页面
-            //   router.pushUrl({ url: RouterPath.DAILY_RECORD })
-            // })
+            .onClick(() => {
+              router.pushUrl({ url: RouterPath.MOOD_CHECK_IN })
+            })
 
             // 快捷入口标题
             Text('快捷功能')
@@ -530,12 +568,16 @@ struct StudentHomePage {
       }
       .tabBar(this.TabBuilder('半月报', 2, '📊'))
 
+
       // ---------- 第 4 个 Tab：咨询预约 ----------
       TabContent() {
         Column() {
+          // 1. 顶部的通用蓝色用户信息栏保持统一
           this.UserHeader()
 
+          // 2. 咨询预约内容
           Column() {
+            // 预约入口卡片
             Column() {
               Row() {
                 Column() {
@@ -567,18 +609,53 @@ struct StudentHomePage {
               router.pushUrl({ url: RouterPath.ROOM_BOOKING })
             })
 
-            // 历史报告
+            // 历史预约记录
             Column() {
-              Text('历史记录')
+              Text('历史预约记录')
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
                 .fontColor(Colors.TEXT_PRIMARY)
                 .margin({ bottom: 12 })
                 .alignSelf(ItemAlign.Start)
 
-              Text('暂无历史记录')
-                .fontSize(14)
-                .fontColor(Colors.TEXT_HINT)
+              if (this.bookingHistoryList.length === 0) {
+                Text('暂无历史预约记录')
+                  .fontSize(14)
+                  .fontColor(Colors.TEXT_HINT)
+                  .padding(20)
+              } else {
+                List({ space: 10 }) {
+                  ForEach(this.bookingHistoryList.slice(0, 3), (record: BookingHistorySummary) => {
+                    ListItem() {
+                      Row() {
+                        Column() {
+                          Text(`${record.room} · ${record.slot}`)
+                            .fontSize(14)
+                            .fontWeight(FontWeight.Medium)
+                            .fontColor(Colors.TEXT_PRIMARY)
+                          Text(`预约时间：${record.dateStr} · 咨询师：${record.consultantName}`)
+                            .fontSize(12)
+                            .fontColor(Colors.TEXT_SECONDARY)
+                            .margin({ top: 4 })
+                        }
+                        .alignItems(HorizontalAlign.Start)
+
+                        Blank()
+
+                        Text(this.formatTimeFromTimestamp(record.timestamp))
+                          .fontSize(12)
+                          .fontColor(Colors.TEXT_HINT)
+                      }
+                      .width('100%')
+                      .padding(14)
+                      .backgroundColor('#F7F8FA')
+                      .borderRadius(12)
+                    }
+                  }, (record: BookingHistorySummary) => record.id)
+                }
+                .width('100%')
+                .height(200)
+              }
             }
             .width('100%')
             .padding(20)
