@@ -3,8 +3,18 @@ import { common } from '@kit.AbilityKit'
 
 const DB_NAME = 'YouthLink.db'
 const TABLE_STUDENTS = 'students'
+const TABLE_COUNSELORS = 'counselors'
+const TABLE_SCHOOL_CENTER = 'school_center'
 
 export interface StudentRow {
+  id: number
+  uid: string
+  name: string
+  passwordHash: string
+  createdAt: string
+}
+
+export interface StaffRow {
   id: number
   uid: string
   name: string
@@ -107,6 +117,26 @@ export class DatabaseHelper {
 
     await this.rdbStore.executeSql(`
       CREATE TABLE IF NOT EXISTS ${TABLE_STUDENTS} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+      )
+    `)
+
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS ${TABLE_COUNSELORS} (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uid TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+      )
+    `)
+
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS ${TABLE_SCHOOL_CENTER} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         uid TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
@@ -253,5 +283,77 @@ export class DatabaseHelper {
 
   getStore(): relationalStore.RdbStore | null {
     return this.rdbStore
+  }
+
+  // ========== 辅导员 (counselors) ==========
+
+  async registerStaff(tableName: string, uid: string, name: string, password: string): Promise<boolean> {
+    if (!this.rdbStore) {
+      return false
+    }
+
+    const existing = await this.findStaffByUid(tableName, uid)
+    if (existing !== null) {
+      return false
+    }
+
+    const passwordHash = hashPassword(password)
+    const valueBucket: relationalStore.ValuesBucket = {
+      'uid': uid,
+      'name': name,
+      'password_hash': passwordHash
+    }
+
+    await this.rdbStore.insert(tableName, valueBucket)
+    return true
+  }
+
+  async findStaffByUid(tableName: string, uid: string): Promise<StaffRow | null> {
+    if (!this.rdbStore) {
+      return null
+    }
+
+    const predicates = new relationalStore.RdbPredicates(tableName)
+    predicates.equalTo('uid', uid)
+
+    const resultSet = await this.rdbStore.query(predicates)
+    if (resultSet.goToFirstRow()) {
+      const row: StaffRow = {
+        id: resultSet.getLong(resultSet.getColumnIndex('id')),
+        uid: resultSet.getString(resultSet.getColumnIndex('uid')),
+        name: resultSet.getString(resultSet.getColumnIndex('name')),
+        passwordHash: resultSet.getString(resultSet.getColumnIndex('password_hash')),
+        createdAt: resultSet.getString(resultSet.getColumnIndex('created_at'))
+      }
+      resultSet.close()
+      return row
+    }
+    resultSet.close()
+    return null
+  }
+
+  async validateStaffLogin(tableName: string, uid: string, password: string): Promise<StaffRow | null> {
+    if (!this.rdbStore) {
+      return null
+    }
+
+    const predicates = new relationalStore.RdbPredicates(tableName)
+    predicates.equalTo('uid', uid)
+    predicates.equalTo('password_hash', hashPassword(password))
+
+    const resultSet = await this.rdbStore.query(predicates)
+    if (resultSet.goToFirstRow()) {
+      const row: StaffRow = {
+        id: resultSet.getLong(resultSet.getColumnIndex('id')),
+        uid: resultSet.getString(resultSet.getColumnIndex('uid')),
+        name: resultSet.getString(resultSet.getColumnIndex('name')),
+        passwordHash: resultSet.getString(resultSet.getColumnIndex('password_hash')),
+        createdAt: resultSet.getString(resultSet.getColumnIndex('created_at'))
+      }
+      resultSet.close()
+      return row
+    }
+    resultSet.close()
+    return null
   }
 }

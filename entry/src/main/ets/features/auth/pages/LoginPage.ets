@@ -26,9 +26,8 @@ struct LoginPage {
   private authService: AuthService = new AuthService()
   private roleOptions: RoleOption[] = [
     { label: '学生', value: RoleType.STUDENT },
-    { label: '教师', value: RoleType.COUNSELOR },
-    { label: '校级', value: RoleType.SCHOOL_ADMIN },
-    { label: '咨询师', value: RoleType.CONSULTANT }
+    { label: '辅导员', value: RoleType.COUNSELOR },
+    { label: '校级心理中心', value: RoleType.SCHOOL_PSY_CENTER }
   ]
 
   aboutToAppear(): void {
@@ -60,11 +59,9 @@ struct LoginPage {
     this.isLoading = true
 
     try {
-      if (this.selectedRole === RoleType.STUDENT) {
-        const dbHelper = DatabaseHelper.getInstance()
-        if (!dbHelper.isReady()) {
-          await dbHelper.ensureInit(getContext(this) as common.UIAbilityContext)
-        }
+      const dbHelper = DatabaseHelper.getInstance()
+      if (!dbHelper.isReady()) {
+        await dbHelper.ensureInit(getContext(this) as common.UIAbilityContext)
       }
 
       const result = await this.authService.login(
