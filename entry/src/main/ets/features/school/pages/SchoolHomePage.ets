@@ -21,6 +21,19 @@ class ModuleEntry {
   }
 }
 
+class TodoEntry {
+  title: string = ''
+  desc: string = ''
+  icon: string = ''
+  route: string = ''
+  constructor(title: string, desc: string, icon: string, route: string) {
+    this.title = title
+    this.desc = desc
+    this.icon = icon
+    this.route = route
+  }
+}
+
 @Entry
 @Component
 struct SchoolHomePage {
@@ -38,6 +51,13 @@ struct SchoolHomePage {
     new ModuleEntry('📝', '面询记录', '咨询记录查询', RouterPath.VISIT_RECORD, '#F59E0B'),
     new ModuleEntry('⚠️', '高危跟进', '重点学生追踪', RouterPath.FOLLOW_UP, Colors.ERROR),
     new ModuleEntry('🎯', '心理活动', '活动发布/效能', RouterPath.ACTIVITY_MANAGE, '#EC4899')
+  ]
+
+  private todoList: TodoEntry[] = [
+    new TodoEntry('热线通话巡视', '关注AI热线中的高危对话', '📞', RouterPath.HOTLINE),
+    new TodoEntry('待处理工单', '查看并分配新增工单', '📋', RouterPath.WORK_ORDER_LIST),
+    new TodoEntry('预约确认', '确认今日咨询预约安排', '📅', RouterPath.SCHEDULE),
+    new TodoEntry('跟进任务', '检查高危学生跟进进度', '⚠️', RouterPath.FOLLOW_UP)
   ]
 
   aboutToAppear(): void {
@@ -269,10 +289,9 @@ struct SchoolHomePage {
       .width('100%')
       .margin({ bottom: 10 })
 
-      this.TodoItem('热线通话巡视', '关注AI热线中的高危对话', '📞')
-      this.TodoItem('待处理工单', '查看并分配新增工单', '📋')
-      this.TodoItem('预约确认', '确认今日咨询预约安排', '📅')
-      this.TodoItem('跟进任务', '检查高危学生跟进进度', '⚠️')
+      ForEach(this.todoList, (item: TodoEntry) => {
+        this.TodoItem(item.title, item.desc, item.icon, item.route)
+      })
     }
     .width('100%')
     .padding(16)
@@ -283,7 +302,7 @@ struct SchoolHomePage {
   }
 
   @Builder
-  TodoItem(title: string, desc: string, icon: string) {
+  TodoItem(title: string, desc: string, icon: string, route: string) {
     Row() {
       Text(icon)
         .fontSize(20)
@@ -306,6 +325,10 @@ struct SchoolHomePage {
     }
     .width('100%')
     .padding({ top: 10, bottom: 10 })
+    .borderRadius(8)
+    .onClick(() => {
+      router.pushUrl({ url: route })
+    })
   }
 
   /* ======================== 工作台 Tab ======================== */
