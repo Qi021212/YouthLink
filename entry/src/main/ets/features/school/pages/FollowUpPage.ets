@@ -1,6 +1,6 @@
 import { router } from '@kit.ArkUI'
 import { Colors } from '../../../common/constants/Colors'
-import { FollowUpTask, FollowUpPriority, RiskLevel } from '../model/SchoolModels'
+import { FollowUpTask, FollowUpPriority } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
 import { RiskBadge } from '../../../common/components/RiskBadge'
 
@@ -27,20 +27,6 @@ struct FollowUpPage {
 
   private getNormalTasks(): FollowUpTask[] {
     return this.tasks.filter((t: FollowUpTask) => t.priority === FollowUpPriority.NORMAL && !t.completed)
-  }
-
-  private getRiskText(level: RiskLevel): string {
-    if (level === RiskLevel.LOW) return '低'
-    if (level === RiskLevel.MEDIUM) return '中'
-    if (level === RiskLevel.HIGH) return '高'
-    return '危'
-  }
-
-  private getRiskClass(level: RiskLevel): string {
-    if (level === RiskLevel.LOW) return 'low'
-    if (level === RiskLevel.MEDIUM) return 'medium'
-    if (level === RiskLevel.HIGH) return 'high'
-    return 'critical'
   }
 
   private getPriorityColor(priority: FollowUpPriority): string {
@@ -71,7 +57,7 @@ struct FollowUpPage {
         .layoutWeight(1)
 
         Column() {
-          RiskBadge({ level: this.getRiskClass(task.riskLevel), text: this.getRiskText(task.riskLevel) })
+          RiskBadge({ riskLevel: task.riskLevel })
         }
       }
       .width('100%')

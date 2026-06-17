@@ -1,6 +1,6 @@
 import { router } from '@kit.ArkUI'
 import { Colors } from '../../../common/constants/Colors'
-import { VisitRecord, RiskLevel } from '../model/SchoolModels'
+import { VisitRecord } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
 import { RiskBadge } from '../../../common/components/RiskBadge'
 
@@ -27,20 +27,6 @@ struct VisitRecordPage {
     return this.records.filter((r: VisitRecord) => {
       return r.studentName.indexOf(this.searchText) >= 0 || r.studentId.indexOf(this.searchText) >= 0
     })
-  }
-
-  private getRiskText(level: RiskLevel): string {
-    if (level === RiskLevel.LOW) return '低'
-    if (level === RiskLevel.MEDIUM) return '中'
-    if (level === RiskLevel.HIGH) return '高'
-    return '危'
-  }
-
-  private getRiskClass(level: RiskLevel): string {
-    if (level === RiskLevel.LOW) return 'low'
-    if (level === RiskLevel.MEDIUM) return 'medium'
-    if (level === RiskLevel.HIGH) return 'high'
-    return 'critical'
   }
 
   build() {
@@ -101,7 +87,7 @@ struct VisitRecordPage {
                   .alignItems(HorizontalAlign.Start)
                   .layoutWeight(1)
 
-                  RiskBadge({ level: this.getRiskClass(record.riskLevel), text: this.getRiskText(record.riskLevel) })
+                  RiskBadge({ riskLevel: record.riskLevel })
                 }
                 .width('100%')
 
