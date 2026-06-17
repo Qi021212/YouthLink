@@ -4,6 +4,7 @@ import { RouterPath } from '../../../common/constants/RouterPath'
 import { DashboardSummary } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
 import { AuthManager } from '../../../core/auth/AuthManager'
+import { UserInfoJson } from '../../../common/model/UserInfo'
 
 class ModuleEntry {
   icon: string = ''
@@ -23,9 +24,11 @@ class ModuleEntry {
 @Entry
 @Component
 struct SchoolHomePage {
-  @State summary: DashboardSummary = new DashboardSummary()
   @State currentTab: number = 0
+  @State summary: DashboardSummary = new DashboardSummary()
   @State isLoading: boolean = true
+  @State userName: string = '管理员'
+  @State userAvatarChar: string = '管'
   private service: SchoolService = new SchoolService()
 
   private mainModules: ModuleEntry[] = [
@@ -38,7 +41,23 @@ struct SchoolHomePage {
   ]
 
   aboutToAppear(): void {
+    this.loadUserInfo()
     this.loadSummary()
+  }
+
+  async loadUserInfo(): Promise<void> {
+    const authManager = AuthManager.getInstance()
+    const json = await authManager.getUserInfoJson()
+    try {
+      const info: UserInfoJson = JSON.parse(json) as UserInfoJson
+      if (info.name && info.name.length > 0) {
+        this.userName = info.name
+        this.userAvatarChar = info.name.charAt(0)
+      }
+    } catch (e) {
+      this.userName = '管理员'
+      this.userAvatarChar = '管'
+    }
   }
 
   async loadSummary(): Promise<void> {
@@ -51,73 +70,146 @@ struct SchoolHomePage {
     }
   }
 
-  @Builder
-  TopBar() {
-    Row() {
-      Text('青心链')
-        .fontSize(22)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(Colors.TEXT_ON_PRIMARY)
-      Blank()
-      Text('校级心理中心')
-        .fontSize(13)
-        .fontColor(Colors.TEXT_ON_PRIMARY + 'CC')
-        .padding({ left: 12, right: 12, top: 4, bottom: 4 })
-        .borderRadius(12)
-        .backgroundColor('rgba(255,255,255,0.2)')
-      Text('  退出')
-        .fontSize(13)
-        .fontColor(Colors.TEXT_ON_PRIMARY)
-        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-        .borderRadius(12)
-        .backgroundColor('rgba(255,255,255,0.15)')
-        .margin({ left: 8 })
-        .onClick(() => {
-          const authManager = AuthManager.getInstance()
-          authManager.logout()
-          router.replaceUrl({ url: RouterPath.LOGIN })
-        })
+  private getTimeGreeting(): string {
+    const hour = new Date().getHours()
+    if (hour >= 6 && hour < 12) { return '上午好' }
+    if (hour >= 12 && hour < 14) { return '中午好' }
+    if (hour >= 14 && hour < 18) { return '下午好' }
+    return '晚上好'
+  }
+
+  build() {
+    Column() {
+      Stack() {
+        if (this.currentTab === 0) {
+          this.buildHomeTab()
+        } else if (this.currentTab === 1) {
+          this.buildWorkbenchTab()
+        } else {
+          this.buildProfileTab()
+        }
+      }
+      .layoutWeight(1)
+
+      this.BottomBar()
     }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 24, bottom: 16 })
+    .height('100%')
+    .backgroundColor(Colors.BACKGROUND)
+  }
+
+  /* ======================== 首页 Tab ======================== */
+  @Builder
+  buildHomeTab(): void {
+    Column() {
+      this.HomeHeader()
+      Scroll() {
+        Column() {
+          this.StatsGrid()
+          this.RiskCard()
+          this.TodayOverview()
+        }
+        .padding({ bottom: 24 })
+      }
+      .scrollBar(BarState.Off)
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  HomeHeader() {
+    Column() {
+      Row() {
+        Column() {
+          Text(this.userName + '，' + this.getTimeGreeting())
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Colors.TEXT_ON_PRIMARY)
+          Text('校级心理中心 · 管理后台')
+            .fontSize(13)
+            .fontColor(Colors.TEXT_ON_PRIMARY)
+            .opacity(0.8)
+            .margin({ top: 4 })
+        }
+        .alignItems(HorizontalAlign.Start)
+
+        Blank()
+
+        Stack({ alignContent: Alignment.Center }) {
+          Circle({ width: 44, height: 44 })
+            .fill('rgba(255,255,255,0.25)')
+          Text(this.userAvatarChar)
+            .fontSize(18)
+            .fontColor(Colors.TEXT_ON_PRIMARY)
+        }
+      }
+      .width('100%')
+      .padding({ left: 24, right: 24, top: 16, bottom: 20 })
+    }
+    .width('100%')
     .backgroundColor(Colors.PRIMARY)
+    .borderRadius({ bottomLeft: 24, bottomRight: 24 })
   }
 
   @Builder
-  StatsBar() {
-    Row() {
-      this.StatCell('进行中通话', this.summary.activeCalls.toString(), Colors.WARNING + '20', Colors.WARNING)
-      this.StatCell('待处理工单', this.summary.pendingOrders.toString(), Colors.INFO + '20', Colors.INFO)
-      this.StatCell('今日预约', this.summary.todayAppointments.toString(), Colors.SUCCESS + '20', Colors.SUCCESS)
-      this.StatCell('待跟进', this.summary.uncompletedFollowUps.toString(), Colors.ERROR + '20', Colors.ERROR)
+  StatsGrid() {
+    Column() {
+      Text('数据概览')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Colors.TEXT_PRIMARY)
+        .alignSelf(ItemAlign.Start)
+        .padding({ left: 4, top: 6, bottom: 6 })
+
+      Grid() {
+        GridItem() {
+          this.StatCell('进行中通话', this.summary.activeCalls.toString(), Colors.WARNING)
+        }
+        GridItem() {
+          this.StatCell('待处理工单', this.summary.pendingOrders.toString(), '#6366F1')
+        }
+        GridItem() {
+          this.StatCell('今日预约', this.summary.todayAppointments.toString(), Colors.SUCCESS)
+        }
+        GridItem() {
+          this.StatCell('待跟进', this.summary.uncompletedFollowUps.toString(), Colors.ERROR)
+        }
+      }
+      .columnsTemplate('1fr 1fr')
+      .columnsGap(12)
+      .rowsGap(12)
+      .width('100%')
     }
     .width('100%')
-    .padding({ left: 12, right: 12, top: 12, bottom: 4 })
+    .padding({ left: 20, right: 20 })
+    .margin({ top: 16 })
   }
 
   @Builder
-  StatCell(label: string, value: string, bgColor: string, valueColor: string) {
+  StatCell(label: string, value: string, color: string) {
     Column() {
       Text(value)
-        .fontSize(22)
+        .fontSize(28)
         .fontWeight(FontWeight.Bold)
-        .fontColor(valueColor)
+        .fontColor(color)
       Text(label)
-        .fontSize(10)
-        .fontColor(Colors.TEXT_HINT)
-        .margin({ top: 4 })
+        .fontSize(12)
+        .fontColor(Colors.TEXT_SECONDARY)
+        .margin({ top: 6 })
     }
-    .width('23%')
-    .padding({ top: 12, bottom: 12 })
-    .borderRadius(10)
-    .backgroundColor(bgColor)
-    .margin({ left: '1%', right: '1%' })
-    .alignItems(HorizontalAlign.Center)
+    .width('100%')
+    .height(80)
     .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .backgroundColor(Colors.CARD_BG)
+    .borderRadius(14)
+    .shadow({ radius: 6, color: Colors.SHADOW, offsetY: 2 })
   }
 
   @Builder
-  RiskDistributionCard() {
+  RiskCard() {
     Column() {
       Row() {
         Text('风险分布')
@@ -125,167 +217,341 @@ struct SchoolHomePage {
           .fontWeight(FontWeight.Medium)
           .fontColor(Colors.TEXT_PRIMARY)
         Blank()
-        Text('总人数 ' + this.summary.totalStudents.toString())
+        Text('全校在册 ' + this.summary.totalStudents.toString() + ' 人')
           .fontSize(12)
           .fontColor(Colors.TEXT_HINT)
       }
       .width('100%')
+      .margin({ bottom: 14 })
 
       Row() {
-        Column() {
-          Column()
-            .layoutWeight(1)
-          Row() {
-            Column()
-              .width(12)
-              .height(12)
-              .borderRadius(3)
-              .backgroundColor(Colors.SUCCESS)
-            Text('低风险')
-              .fontSize(12)
-              .fontColor(Colors.TEXT_SECONDARY)
-              .margin({ left: 6 })
-            Blank()
-            Text(this.summary.riskDistribution[0].toString())
-              .fontSize(12)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Colors.TEXT_PRIMARY)
-          }
-          .width('100%')
-
-          Row() {
-            Column()
-              .width(12)
-              .height(12)
-              .borderRadius(3)
-              .backgroundColor(Colors.WARNING)
-            Text('中风险')
-              .fontSize(12)
-              .fontColor(Colors.TEXT_SECONDARY)
-              .margin({ left: 6 })
-            Blank()
-            Text(this.summary.riskDistribution[1].toString())
-              .fontSize(12)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Colors.TEXT_PRIMARY)
-          }
-          .width('100%')
-          .margin({ top: 8 })
-
-          Row() {
-            Column()
-              .width(12)
-              .height(12)
-              .borderRadius(3)
-              .backgroundColor('#F97316')
-            Text('高风险')
-              .fontSize(12)
-              .fontColor(Colors.TEXT_SECONDARY)
-              .margin({ left: 6 })
-            Blank()
-            Text(this.summary.riskDistribution[2].toString())
-              .fontSize(12)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Colors.TEXT_PRIMARY)
-          }
-          .width('100%')
-          .margin({ top: 8 })
-
-          Row() {
-            Column()
-              .width(12)
-              .height(12)
-              .borderRadius(3)
-              .backgroundColor(Colors.ERROR)
-            Text('极高风险')
-              .fontSize(12)
-              .fontColor(Colors.TEXT_SECONDARY)
-              .margin({ left: 6 })
-            Blank()
-            Text(this.summary.riskDistribution[3].toString())
-              .fontSize(12)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(Colors.TEXT_PRIMARY)
-          }
-          .width('100%')
-          .margin({ top: 8 })
-        }
-        .layoutWeight(1)
-        .padding({ right: 16 })
+        this.RiskBar('低风险', this.summary.riskDistribution[0], Colors.SUCCESS)
+        this.RiskBar('中风险', this.summary.riskDistribution[1], Colors.WARNING)
+        this.RiskBar('高风险', this.summary.riskDistribution[2], '#F97316')
+        this.RiskBar('极高风险', this.summary.riskDistribution[3], Colors.ERROR)
       }
       .width('100%')
-      .margin({ top: 12 })
     }
     .width('100%')
     .padding(16)
     .backgroundColor(Colors.CARD_BG)
     .borderRadius(14)
-    .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
+    .shadow({ radius: 6, color: Colors.SHADOW, offsetY: 2 })
+    .margin({ left: 20, right: 20, top: 16 })
   }
 
   @Builder
-  ModuleListItem(module: ModuleEntry) {
-    Row() {
-      Text(module.icon)
-        .fontSize(28)
-      Column() {
-        Text(module.title)
-          .fontSize(15)
+  RiskBar(label: string, count: number, color: string) {
+    Column() {
+      Text(count.toString())
+        .fontSize(24)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(color)
+      Text(label)
+        .fontSize(11)
+        .fontColor(Colors.TEXT_SECONDARY)
+        .margin({ top: 4 })
+    }
+    .layoutWeight(1)
+    .alignItems(HorizontalAlign.Center)
+  }
+
+  @Builder
+  TodayOverview() {
+    Column() {
+      Row() {
+        Text('今日待办')
+          .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .fontColor(Colors.TEXT_PRIMARY)
-        Text(module.subtitle)
-          .fontSize(11)
+        Blank()
+      }
+      .width('100%')
+      .margin({ bottom: 10 })
+
+      this.TodoItem('热线通话巡视', '关注AI热线中的高危对话', '📞')
+      this.TodoItem('待处理工单', '查看并分配新增工单', '📋')
+      this.TodoItem('预约确认', '确认今日咨询预约安排', '📅')
+      this.TodoItem('跟进任务', '检查高危学生跟进进度', '⚠️')
+    }
+    .width('100%')
+    .padding(16)
+    .backgroundColor(Colors.CARD_BG)
+    .borderRadius(14)
+    .shadow({ radius: 6, color: Colors.SHADOW, offsetY: 2 })
+    .margin({ left: 20, right: 20, top: 16 })
+  }
+
+  @Builder
+  TodoItem(title: string, desc: string, icon: string) {
+    Row() {
+      Text(icon)
+        .fontSize(20)
+        .margin({ right: 12 })
+      Column() {
+        Text(title)
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Colors.TEXT_PRIMARY)
+        Text(desc)
+          .fontSize(12)
           .fontColor(Colors.TEXT_HINT)
           .margin({ top: 2 })
       }
       .alignItems(HorizontalAlign.Start)
-      .margin({ left: 14 })
       .layoutWeight(1)
-
-      Text('→')
-        .fontSize(16)
+      Text('>')
+        .fontSize(14)
         .fontColor(Colors.TEXT_HINT)
     }
     .width('100%')
-    .height(64)
-    .padding({ left: 16, right: 16 })
-    .backgroundColor(Colors.CARD_BG)
-    .borderRadius(12)
-    .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 1 })
-    .margin({ bottom: 10 })
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      router.pushUrl({ url: module.route })
-    })
+    .padding({ top: 10, bottom: 10 })
   }
 
-  build() {
+  /* ======================== 工作台 Tab ======================== */
+  @Builder
+  buildWorkbenchTab(): void {
     Column() {
-      this.TopBar()
+      Row() {
+        Text('工作台')
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(Colors.TEXT_PRIMARY)
+        Blank()
+      }
+      .width('100%')
+      .padding({ left: 24, right: 24, top: 16, bottom: 8 })
 
       Scroll() {
-        Column() {
-          this.StatsBar()
-          this.RiskDistributionCard()
-
-          Text('功能模块')
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(Colors.TEXT_PRIMARY)
-            .alignSelf(ItemAlign.Start)
-            .padding({ left: 16, top: 20, bottom: 10 })
-
-          ForEach(this.mainModules, (module: ModuleEntry) => {
-            this.ModuleListItem(module)
+        Grid() {
+          ForEach(this.mainModules, (item: ModuleEntry) => {
+            GridItem() {
+              this.ModuleCard(item)
+            }
           })
         }
-        .padding({ bottom: 20 })
+        .columnsTemplate('1fr 1fr')
+        .columnsGap(14)
+        .rowsGap(14)
+        .width('100%')
+        .padding({ left: 20, right: 20, bottom: 24 })
       }
       .scrollBar(BarState.Off)
       .layoutWeight(1)
     }
     .width('100%')
     .height('100%')
-    .backgroundColor(Colors.BACKGROUND)
+  }
+
+  @Builder
+  ModuleCard(item: ModuleEntry) {
+    Column() {
+      Column() {
+        Text(item.icon)
+          .fontSize(36)
+      }
+      .width(56)
+      .height(56)
+      .borderRadius(16)
+      .backgroundColor(item.color + '18')
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+
+      Text(item.title)
+        .fontSize(15)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Colors.TEXT_PRIMARY)
+        .margin({ top: 14 })
+
+      Text(item.subtitle)
+        .fontSize(11)
+        .fontColor(Colors.TEXT_HINT)
+        .margin({ top: 4 })
+    }
+    .width('100%')
+    .padding({ top: 20, bottom: 20 })
+    .backgroundColor(Colors.CARD_BG)
+    .borderRadius(16)
+    .shadow({ radius: 6, color: Colors.SHADOW, offsetY: 2 })
+    .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      router.pushUrl({ url: item.route })
+    })
+  }
+
+  /* ======================== 我的 Tab ======================== */
+  @Builder
+  buildProfileTab(): void {
+    Scroll() {
+      Column() {
+        // 个人信息卡片
+        Column() {
+          Stack({ alignContent: Alignment.Center }) {
+            Circle({ width: 72, height: 72 })
+              .fill(Colors.PRIMARY + '25')
+            Text(this.userAvatarChar)
+              .fontSize(30)
+              .fontColor(Colors.PRIMARY)
+          }
+          .margin({ top: 28 })
+
+          Text(this.userName)
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Colors.TEXT_PRIMARY)
+            .margin({ top: 14 })
+
+          Text('校级心理中心')
+            .fontSize(13)
+            .fontColor(Colors.TEXT_SECONDARY)
+            .margin({ top: 4 })
+
+          Row() {
+            Column() {
+              Text(this.summary.totalStudents.toString())
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Colors.TEXT_PRIMARY)
+              Text('全校学生')
+                .fontSize(11)
+                .fontColor(Colors.TEXT_HINT)
+                .margin({ top: 2 })
+            }
+            .layoutWeight(1)
+
+            Column() {
+              Text(this.summary.todayAppointments.toString())
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Colors.TEXT_PRIMARY)
+              Text('今日预约')
+                .fontSize(11)
+                .fontColor(Colors.TEXT_HINT)
+                .margin({ top: 2 })
+            }
+            .layoutWeight(1)
+
+            Column() {
+              Text(this.summary.activeCalls.toString())
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Colors.TEXT_PRIMARY)
+              Text('活跃热线')
+                .fontSize(11)
+                .fontColor(Colors.TEXT_HINT)
+                .margin({ top: 2 })
+            }
+            .layoutWeight(1)
+          }
+          .width('84%')
+          .margin({ top: 24 })
+          .padding({ top: 14, bottom: 14 })
+          .backgroundColor(Colors.BACKGROUND)
+          .borderRadius(12)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
+
+        // 设置
+        Text('设置')
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Colors.TEXT_PRIMARY)
+          .alignSelf(ItemAlign.Start)
+          .padding({ left: 24, top: 28, bottom: 10 })
+
+        this.SettingsItem('账号与安全', '修改密码与安全设置', () => {
+          router.pushUrl({ url: 'features/auth/pages/ChangePasswordPage' })
+        })
+
+        this.SettingsItem('通知设置', '管理预警推送与提醒', () => {
+        })
+
+        this.SettingsItem('关于青心链', 'v1.0.0 校级心理中心版', () => {
+        })
+
+        // 退出登录
+        Button('退出登录')
+          .fontSize(15)
+          .fontColor('#EF4444')
+          .backgroundColor('#FEE2E2')
+          .borderRadius(12)
+          .height(48)
+          .width('88%')
+          .margin({ top: 32, bottom: 40 })
+          .onClick(() => {
+            const authManager = AuthManager.getInstance()
+            authManager.logout()
+            router.replaceUrl({ url: RouterPath.LOGIN })
+          })
+      }
+    }
+    .scrollBar(BarState.Off)
+  }
+
+  @Builder
+  SettingsItem(title: string, subtitle: string, onClickAction?: () => void) {
+    Row() {
+      Column() {
+        Text(title)
+          .fontSize(15)
+          .fontColor(Colors.TEXT_PRIMARY)
+        Text(subtitle)
+          .fontSize(12)
+          .fontColor(Colors.TEXT_HINT)
+          .margin({ top: 2 })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Text('>')
+        .fontSize(16)
+        .fontColor(Colors.TEXT_HINT)
+    }
+    .width('88%')
+    .height(56)
+    .padding({ left: 16, right: 16 })
+    .backgroundColor(Colors.CARD_BG)
+    .borderRadius(12)
+    .margin({ bottom: 8 })
+    .onClick(() => {
+      if (onClickAction) {
+        onClickAction()
+      }
+    })
+  }
+
+  /* ======================== 底部导航栏 ======================== */
+  @Builder
+  BottomBar() {
+    Row() {
+      this.TabItem('首页', '🏠', 0)
+      this.TabItem('工作台', '💼', 1)
+      this.TabItem('我的', '👤', 2)
+    }
+    .width('100%')
+    .height(56)
+    .justifyContent(FlexAlign.SpaceAround)
+    .backgroundColor(Colors.CARD_BG)
+    .border({ width: { top: 1 }, color: '#F3F4F6' })
+  }
+
+  @Builder
+  TabItem(label: string, icon: string, index: number) {
+    Column() {
+      Text(icon)
+        .fontSize(22)
+        .opacity(this.currentTab === index ? 1 : 0.5)
+      Text(label)
+        .fontSize(11)
+        .fontColor(this.currentTab === index ? Colors.PRIMARY : Colors.TEXT_HINT)
+        .margin({ top: 3 })
+        .fontWeight(this.currentTab === index ? FontWeight.Bold : FontWeight.Normal)
+    }
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .onClick(() => {
+      this.currentTab = index
+    })
   }
 }
