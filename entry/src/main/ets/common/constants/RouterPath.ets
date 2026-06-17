@@ -18,5 +18,12 @@ export class RouterPath {
   static readonly HEATMAP = 'features/counselor/pages/HeatmapPage'
   static readonly WARNING_TIMELINE = 'features/counselor/pages/WarningTimelinePage'
   static readonly SCHOOL_HOME = 'features/school/pages/SchoolHomePage'
+  static readonly HOTLINE = 'features/school/pages/HotlinePage'
+  static readonly WORK_ORDER_LIST = 'features/school/pages/WorkOrderListPage'
+  static readonly WORK_ORDER_DETAIL = 'features/school/pages/WorkOrderDetailPage'
+  static readonly SCHEDULE = 'features/school/pages/SchedulePage'
+  static readonly VISIT_RECORD = 'features/school/pages/VisitRecordPage'
+  static readonly FOLLOW_UP = 'features/school/pages/FollowUpPage'
+  static readonly ACTIVITY_MANAGE = 'features/school/pages/ActivityManagePage'
 
 }
