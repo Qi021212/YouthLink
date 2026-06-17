@@ -3,6 +3,7 @@ import { Colors } from '../../../common/constants/Colors'
 import { RouterPath } from '../../../common/constants/RouterPath'
 import { DashboardSummary } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
+import { AuthManager } from '../../../core/auth/AuthManager'
 
 class ModuleEntry {
   icon: string = ''
@@ -64,6 +65,18 @@ struct SchoolHomePage {
         .padding({ left: 12, right: 12, top: 4, bottom: 4 })
         .borderRadius(12)
         .backgroundColor('rgba(255,255,255,0.2)')
+      Text('  退出')
+        .fontSize(13)
+        .fontColor(Colors.TEXT_ON_PRIMARY)
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .borderRadius(12)
+        .backgroundColor('rgba(255,255,255,0.15)')
+        .margin({ left: 8 })
+        .onClick(() => {
+          const authManager = AuthManager.getInstance()
+          authManager.logout()
+          router.replaceUrl({ url: RouterPath.LOGIN })
+        })
     }
     .width('100%')
     .padding({ left: 20, right: 20, top: 24, bottom: 16 })
