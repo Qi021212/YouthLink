@@ -8,6 +8,8 @@ import {
   RiskBehavior,
   RiskOption
 } from '../../../common/utils/RiskAlgorithm'
+import { ReportData } from '../../../common/model/ReportModel';
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper';
 
 // --- 数据模型定义 ---
 interface SurveyOption {
@@ -171,6 +173,37 @@ struct SemiMonthlyPage {
     // 1. 移交公用引擎进行分数判定与持久化
     const currentBatchTimestamp = await RiskAlgorithm.evaluateAndSave(getContext(this), this.questions, this.answers, this.behaviors)
 
+    // 核心新增：基于行为数据的“防糊弄”可信度算法 (0-100分)
+    let totalDurationMs = 0;
+    let totalModifications = 0;
+
+    // 汇总所有题目的作答时间和修改次数
+    Object.values(this.behaviors).forEach(b => {
+      totalDurationMs += b.totalDuration;
+      totalModifications += b.modifyCount;
+    });
+
+    // 计算平均每题耗时 (毫秒)
+    const avgTimePerQuestion = totalDurationMs / this.questions.length;
+    let credibility = 100;
+
+    // 惩罚机制 1：作答过快（秒选）
+    if (avgTimePerQuestion < 1200) {
+      // 平均每题不到 1.2 秒，几乎没看题，重度瞎填
+      credibility -= 50;
+    } else if (avgTimePerQuestion < 2500) {
+      // 平均每题不到 2.5 秒，敷衍了事
+      credibility -= 20;
+    }
+
+    // 惩罚机制 2：零思考、零修改且速度偏快
+    if (totalModifications === 0 && avgTimePerQuestion < 3000) {
+      credibility -= 10;
+    }
+
+    // 边界保护
+    credibility = Math.max(0, Math.min(100, Math.round(credibility)));
+
     // 🚀 核心升级：问卷全量动态答案语义序列化
     let qaTextList: string[] = []
 
@@ -206,7 +239,8 @@ struct SemiMonthlyPage {
     // 3. 路由跳转并传递数据至画像页 (将原本单一的树洞文本升级为全量回答历史)
     RouterIndex.replace('features/student/pages/PortraitResultPage', {
       'fullQaHistory': fullQaHistory,
-      'currentTimestamp': currentBatchTimestamp // 👈 传过去，方便结果页拿到 AI 文本后跟它绑定
+      'currentTimestamp': currentBatchTimestamp, // 👈 传过去，方便结果页拿到 AI 文本后跟它绑定
+      'credibilityScore': credibility
     })
   }
 

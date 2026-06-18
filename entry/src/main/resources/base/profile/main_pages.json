@@ -25,6 +25,8 @@
     "features/school/pages/SchedulePage",
     "features/school/pages/VisitRecordPage",
     "features/school/pages/FollowUpPage",
-    "features/school/pages/ActivityManagePage"
+    "features/school/pages/ActivityManagePage",
+    "features/counselor/pages/ReportDetailPage",
+    "features/counselor/pages/ReportAuditPage"
   ]
 }

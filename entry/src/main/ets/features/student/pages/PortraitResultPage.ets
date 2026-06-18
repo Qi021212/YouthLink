@@ -5,6 +5,12 @@ import { RiskAlgorithm, HistoryRecord } from '../../../common/utils/RiskAlgorith
 import { AIPortraitService } from '../service/AIPortraitService'
 import { RouterIndex } from '../../../router/RouterIndex'
 
+import { ReportData } from '../../../common/model/ReportModel'
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
+import { AuthManager } from '../../../core/auth/AuthManager'
+import { UserInfoJson } from '../../../common/model/UserInfo'
+import { common } from '@kit.AbilityKit'
+
 @Entry
 @Component
 struct PortraitResultPage {
@@ -50,6 +56,9 @@ struct PortraitResultPage {
       // 拿到刚才答题页传过来的最新时间戳
       let currentTs = params['currentTimestamp'] as number || Date.now();
 
+      // 🌟 接收刚刚从答题页传过来的真实“防糊弄”可信度分数
+      let realCredibility = params['credibilityScore'] as number || 85;
+
       // 1. 加载本次的分数（驱动雷达图）
       this.scores = await RiskAlgorithm.getLatestScores(ctx);
 
@@ -58,6 +67,56 @@ struct PortraitResultPage {
 
       // 3. 🌟 核心新增：趁着新鲜，把 AI 吐出来的段落文本塞进 SQLite，封存归档！
       await RiskAlgorithm.saveAiReport(ctx, currentTs, this.aiPortraitText);
+
+      // 4. 调用 AI 获取给辅导员看的客观摘要 (不展示在 UI，直接存库)
+      let counselorSummary = await AIPortraitService.generateCounselorSummary(this.fullQaHistory);
+
+      // =========================================================================
+      // 🌟 核心联动作业：在这里将真实数据打包，存入 SQLite 供辅导员端拉取
+      // =========================================================================
+      try {
+        let report = new ReportData();
+        report.id = currentTs.toString(); // 使用时间戳作为唯一主键
+        report.submitTime = currentTs;
+        report.qaHistory = this.fullQaHistory;
+        report.aiCounselorSummary = counselorSummary; // 老师看的
+        report.aiStudentPortrait = this.aiPortraitText; // 学生看的
+        report.aiScore = realCredibility;    // 存入真实的行为可信度得分
+        report.status = 'pending';           // 初始状态为待审
+
+        // 尝试从 AuthManager 获取真实的登录学生姓名
+        const authManager = AuthManager.getInstance();
+        const json = await authManager.getUserInfoJson();
+        if (json) {
+          const info = JSON.parse(json) as UserInfoJson;
+          report.studentName = info.name || info.uid || '匿名学生';
+        } else {
+          report.studentName = '匿名学生';
+        }
+        report.className = '软件工程2301班'; // 真实场景中如果 info 里有班级可以替换
+
+        // 根据最新分数的平均值，科学计算出风险等级与可信度打分
+        let sum = 0;
+        this.scores.forEach(s => sum += s.score);
+        let avgScore = this.scores.length > 0 ? sum / this.scores.length : 5;
+
+        if (avgScore <= 2.5) {
+          report.riskLevel = '高风险';
+        } else if (avgScore <= 3.5) {
+          report.riskLevel = '中风险';
+        } else {
+          report.riskLevel = '低风险';
+        }
+
+        // 获取数据库实例并写入
+        const db = DatabaseHelper.getInstance();
+        await db.ensureInit(ctx as common.UIAbilityContext);
+        await db.addReport(report);
+        console.info('【同步成功】学生端报告已成功写入辅导员大盘数据库！');
+
+      } catch (err) {
+        console.error('写入辅导员数据库失败:', JSON.stringify(err));
+      }
 
       this.isLoading = false;
     }

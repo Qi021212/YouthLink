@@ -73,4 +73,54 @@ export class AIPortraitService {
       httpRequest.destroy()
     }
   }
+
+  /**
+   * 2. 辅导员视角：生成客观、专业的风险总结报告
+   * @param qaHistory 学生的详细答卷文本记录
+   */
+  static async generateCounselorSummary(qaHistory: string): Promise<string> {
+    const systemPrompt = `你是一个高校心理辅导员的AI业务助手。请根据以下学生的半月报作答记录，生成一段100字以内的客观、专业的总结报告。
+规则要求：
+1. 第三方客观视角，绝对不要使用“亲爱的同学”、“你”等第一人称对话口吻，统一称呼为“该生”。
+2. 一针见血地指出该生近期面临的主要困扰（如学业压力、睡眠剥夺、人际关系等）和潜在风险点。
+3. 语气严肃、凝练、直击痛点。`
+
+    const userPrompt = `【该生作答记录】\n${qaHistory}\n\n请生成专业的辅导员预审摘要：`
+
+    const httpRequest = http.createHttp()
+    try {
+      const response = await httpRequest.request(
+        AIPortraitService.API_URL,
+        {
+          method: http.RequestMethod.POST,
+          header: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${AIPortraitService.API_KEY}`
+          },
+          extraData: {
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
+            ],
+            temperature: 0.3, // 🌟 降低温度，使 AI 输出更加严谨、客观，不产生多余的废话
+            max_tokens: 300   // 摘要比较短，不需要太多的 Token
+          },
+          readTimeout: 15000,
+          connectTimeout: 15000
+        }
+      )
+
+      if (response.responseCode === 200) {
+        const result = JSON.parse(response.result as string) as DeepSeekResponse
+        return result.choices[0].message.content
+      } else {
+        return 'AI 摘要生成失败，建议人工审阅该生原始答卷记录。'
+      }
+    } catch (error) {
+      return '网络请求异常，暂无 AI 分析摘要。'
+    } finally {
+      httpRequest.destroy()
+    }
+  }
 }

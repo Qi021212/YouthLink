@@ -1,6 +1,7 @@
 import { relationalStore } from '@kit.ArkData'
 import { common } from '@kit.AbilityKit'
 import { CaseData } from '../../features/counselor/model/CaseData';
+import { ReportData } from '../../common/model/ReportModel';
 
 const DB_NAME = 'YouthLink.db'
 const TABLE_STUDENTS = 'students'
@@ -184,6 +185,22 @@ export class DatabaseHelper {
         type TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
         FOREIGN KEY(case_id) REFERENCES cases(id)
+      )
+    `);
+
+    // 新增：创建半月报表
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS reports (
+        id TEXT PRIMARY KEY,
+        student_name TEXT NOT NULL,
+        class_name TEXT NOT NULL,
+        submit_time INTEGER NOT NULL,
+        ai_score INTEGER NOT NULL,
+        ai_counselor_summary TEXT NOT NULL,
+        ai_student_portrait TEXT NOT NULL,
+        risk_level TEXT NOT NULL,
+        status TEXT NOT NULL,
+        qa_history TEXT NOT NULL
       )
     `);
 
@@ -515,5 +532,66 @@ export class DatabaseHelper {
     }
     resultSet.close();
     return null;
+  }
+
+  // ================= 🌟 半月报 (Reports) 核心方法 =================
+
+  // 1. 学生端调用：新增半月报
+  async addReport(report: ReportData): Promise<void> {
+    if (!this.rdbStore) return;
+
+    let bucket: relationalStore.ValuesBucket = {
+      'id': report.id,
+      'student_name': report.studentName,
+      'class_name': report.className,
+      'submit_time': report.submitTime,
+      'ai_score': report.aiScore,
+      'ai_counselor_summary': report.aiCounselorSummary, // 🌟 存入辅导员版
+      'ai_student_portrait': report.aiStudentPortrait,   // 🌟 存入学生版
+      'risk_level': report.riskLevel,
+      'status': report.status,
+      'qa_history': report.qaHistory
+    };
+
+    await this.rdbStore.insert('reports', bucket);
+  }
+
+  // 2. 辅导员端调用：拉取所有半月报
+  async getAllReports(): Promise<ReportData[]> {
+    if (!this.rdbStore) return [];
+
+    // 默认按提交时间倒序（最新的在最上面）
+    const resultSet = await this.rdbStore.querySql('SELECT * FROM reports ORDER BY submit_time DESC');
+    const result: ReportData[] = [];
+
+    while (resultSet.goToNextRow()) {
+      let r = new ReportData(); // 严防 structural typing 报错
+      r.id = resultSet.getString(resultSet.getColumnIndex('id'));
+      r.studentName = resultSet.getString(resultSet.getColumnIndex('student_name'));
+      r.className = resultSet.getString(resultSet.getColumnIndex('class_name'));
+      r.submitTime = resultSet.getLong(resultSet.getColumnIndex('submit_time'));
+      r.aiScore = resultSet.getLong(resultSet.getColumnIndex('ai_score'));
+      r.aiCounselorSummary = resultSet.getString(resultSet.getColumnIndex('ai_counselor_summary')); // 🌟 取出
+      r.aiStudentPortrait = resultSet.getString(resultSet.getColumnIndex('ai_student_portrait'));   // 🌟 取出
+      r.riskLevel = resultSet.getString(resultSet.getColumnIndex('risk_level'));
+      r.status = resultSet.getString(resultSet.getColumnIndex('status'));
+      r.qaHistory = resultSet.getString(resultSet.getColumnIndex('qa_history'));
+      result.push(r);
+    }
+    resultSet.close();
+    return result;
+  }
+
+  // 3. 辅导员端调用：更新报告审核状态
+  async updateReportStatus(id: string, newStatus: string): Promise<boolean> {
+    if (!this.rdbStore) return false;
+    try {
+      const sql = `UPDATE reports SET status = ? WHERE id = ?`;
+      await this.rdbStore.executeSql(sql, [newStatus, id]);
+      return true;
+    } catch (err) {
+      console.error('更新报告状态失败:', JSON.stringify(err));
+      return false;
+    }
   }
 }
