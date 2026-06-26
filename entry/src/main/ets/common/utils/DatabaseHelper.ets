@@ -43,6 +43,33 @@ export interface RecordRow {
   timestamp: number;
 }
 
+export interface HotlineCallRow {
+  callId: string;
+  callerName: string;
+  callerStudentId: string;
+  phoneNumber: string;
+  startTime: string;
+  duration: number;
+  status: number;
+  riskLevel: number;
+  tags: string[];
+  aiSummary: string;
+}
+
+export interface WorkOrderRow {
+  orderId: string;
+  relatedCallId: string;
+  studentName: string;
+  studentId: string;
+  type: string;
+  description: string;
+  status: number;
+  assignedTo: string;
+  createdAt: string;
+  updatedAt: string;
+  riskLevel: number;
+}
+
 function stringToUint8Array(str: string): Uint8Array {
   const bytes: number[] = []
   for (let i = 0; i < str.length; i++) {
@@ -201,6 +228,39 @@ export class DatabaseHelper {
         risk_level TEXT NOT NULL,
         status TEXT NOT NULL,
         qa_history TEXT NOT NULL
+      )
+    `);
+
+    // 新增：学校端热线记录
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS hotline_calls (
+        call_id TEXT PRIMARY KEY,
+        caller_name TEXT NOT NULL,
+        caller_student_id TEXT NOT NULL,
+        phone_number TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        duration INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        risk_level INTEGER NOT NULL,
+        tags TEXT NOT NULL,
+        ai_summary TEXT NOT NULL
+      )
+    `);
+
+    // 新增：学校端工单
+    await this.rdbStore.executeSql(`
+      CREATE TABLE IF NOT EXISTS work_orders (
+        order_id TEXT PRIMARY KEY,
+        related_call_id TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        student_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        status INTEGER NOT NULL,
+        assigned_to TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        risk_level INTEGER NOT NULL
       )
     `);
 
@@ -593,5 +653,160 @@ export class DatabaseHelper {
       console.error('更新报告状态失败:', JSON.stringify(err));
       return false;
     }
+  }
+
+  // ================= 🌟 学校端 (Hotline & WorkOrder) 方法 =================
+
+  async addHotlineCall(callId: string, callerName: string, callerStudentId: string, phoneNumber: string, startTime: string, duration: number, status: number, riskLevel: number, tags: string[], aiSummary: string): Promise<void> {
+    if (!this.rdbStore) return;
+    let bucket: relationalStore.ValuesBucket = {
+      'call_id': callId,
+      'caller_name': callerName,
+      'caller_student_id': callerStudentId,
+      'phone_number': phoneNumber,
+      'start_time': startTime,
+      'duration': duration,
+      'status': status,
+      'risk_level': riskLevel,
+      'tags': JSON.stringify(tags),
+      'ai_summary': aiSummary
+    };
+    try {
+      await this.rdbStore.insert('hotline_calls', bucket);
+    } catch (e) {
+      console.error('Failed to add hotline call', JSON.stringify(e));
+    }
+  }
+
+  async updateHotlineCallStatus(callId: string, status: number): Promise<void> {
+    if (!this.rdbStore) return;
+    const sql = `UPDATE hotline_calls SET status = ? WHERE call_id = ?`;
+    await this.rdbStore.executeSql(sql, [status, callId]);
+  }
+
+  async getActiveHotlineCalls(): Promise<HotlineCallRow[]> {
+    if (!this.rdbStore) return [];
+    // 假设 0 是 ONGOING
+    const resultSet = await this.rdbStore.querySql('SELECT * FROM hotline_calls WHERE status = 0 ORDER BY start_time DESC');
+    const result: HotlineCallRow[] = [];
+    while (resultSet.goToNextRow()) {
+      const row: HotlineCallRow = {
+        callId: resultSet.getString(resultSet.getColumnIndex('call_id')),
+        callerName: resultSet.getString(resultSet.getColumnIndex('caller_name')),
+        callerStudentId: resultSet.getString(resultSet.getColumnIndex('caller_student_id')),
+        phoneNumber: resultSet.getString(resultSet.getColumnIndex('phone_number')),
+        startTime: resultSet.getString(resultSet.getColumnIndex('start_time')),
+        duration: resultSet.getLong(resultSet.getColumnIndex('duration')),
+        status: resultSet.getLong(resultSet.getColumnIndex('status')),
+        riskLevel: resultSet.getLong(resultSet.getColumnIndex('risk_level')),
+        tags: JSON.parse(resultSet.getString(resultSet.getColumnIndex('tags')) || '[]'),
+        aiSummary: resultSet.getString(resultSet.getColumnIndex('ai_summary'))
+      };
+      result.push(row);
+    }
+    resultSet.close();
+    return result;
+  }
+
+  async addWorkOrder(orderId: string, relatedCallId: string, studentName: string, studentId: string, type: string, description: string, status: number, assignedTo: string, createdAt: string, riskLevel: number): Promise<void> {
+    if (!this.rdbStore) return;
+    let bucket: relationalStore.ValuesBucket = {
+      'order_id': orderId,
+      'related_call_id': relatedCallId,
+      'student_name': studentName,
+      'student_id': studentId,
+      'type': type,
+      'description': description,
+      'status': status,
+      'assigned_to': assignedTo,
+      'created_at': createdAt,
+      'updated_at': createdAt,
+      'risk_level': riskLevel
+    };
+    try {
+      await this.rdbStore.insert('work_orders', bucket);
+    } catch (e) {
+      console.error('Failed to add work order', JSON.stringify(e));
+    }
+  }
+
+  async updateWorkOrderStatus(orderId: string, newStatus: number, assignedTo: string): Promise<boolean> {
+    if (!this.rdbStore) return false;
+    try {
+      const sql = `UPDATE work_orders SET status = ?, assigned_to = ? WHERE order_id = ?`;
+      await this.rdbStore.executeSql(sql, [newStatus, assignedTo, orderId]);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async updateWorkOrderRiskLevel(orderId: string, riskLevel: number): Promise<boolean> {
+    if (!this.rdbStore) return false;
+    try {
+      // 简单的时间格式化为 YYYY-MM-DD HH:mm
+      const d = new Date()
+      const m = (d.getMonth() + 1).toString().padStart(2, '0')
+      const dd = d.getDate().toString().padStart(2, '0')
+      const hh = d.getHours().toString().padStart(2, '0')
+      const mm = d.getMinutes().toString().padStart(2, '0')
+      const nowStr = `${d.getFullYear()}-${m}-${dd} ${hh}:${mm}`
+      
+      const sql = `UPDATE work_orders SET risk_level = ?, updated_at = ? WHERE order_id = ?`;
+      await this.rdbStore.executeSql(sql, [riskLevel, nowStr, orderId]);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async getAllWorkOrders(): Promise<WorkOrderRow[]> {
+    if (!this.rdbStore) return [];
+    const resultSet = await this.rdbStore.querySql('SELECT * FROM work_orders ORDER BY created_at DESC');
+    const result: WorkOrderRow[] = [];
+    while (resultSet.goToNextRow()) {
+      const row: WorkOrderRow = {
+        orderId: resultSet.getString(resultSet.getColumnIndex('order_id')),
+        relatedCallId: resultSet.getString(resultSet.getColumnIndex('related_call_id')),
+        studentName: resultSet.getString(resultSet.getColumnIndex('student_name')),
+        studentId: resultSet.getString(resultSet.getColumnIndex('student_id')),
+        type: resultSet.getString(resultSet.getColumnIndex('type')),
+        description: resultSet.getString(resultSet.getColumnIndex('description')),
+        status: resultSet.getLong(resultSet.getColumnIndex('status')),
+        assignedTo: resultSet.getString(resultSet.getColumnIndex('assigned_to')),
+        createdAt: resultSet.getString(resultSet.getColumnIndex('created_at')),
+        updatedAt: resultSet.getString(resultSet.getColumnIndex('updated_at')),
+        riskLevel: resultSet.getLong(resultSet.getColumnIndex('risk_level'))
+      };
+      result.push(row);
+    }
+    resultSet.close();
+    return result;
+  }
+
+  async getWorkOrderById(orderId: string): Promise<WorkOrderRow | null> {
+    if (!this.rdbStore) return null;
+    const predicates = new relationalStore.RdbPredicates('work_orders');
+    predicates.equalTo('order_id', orderId);
+    const resultSet = await this.rdbStore.query(predicates);
+    if (resultSet.goToFirstRow()) {
+      const row: WorkOrderRow = {
+        orderId: resultSet.getString(resultSet.getColumnIndex('order_id')),
+        relatedCallId: resultSet.getString(resultSet.getColumnIndex('related_call_id')),
+        studentName: resultSet.getString(resultSet.getColumnIndex('student_name')),
+        studentId: resultSet.getString(resultSet.getColumnIndex('student_id')),
+        type: resultSet.getString(resultSet.getColumnIndex('type')),
+        description: resultSet.getString(resultSet.getColumnIndex('description')),
+        status: resultSet.getLong(resultSet.getColumnIndex('status')),
+        assignedTo: resultSet.getString(resultSet.getColumnIndex('assigned_to')),
+        createdAt: resultSet.getString(resultSet.getColumnIndex('created_at')),
+        updatedAt: resultSet.getString(resultSet.getColumnIndex('updated_at')),
+        riskLevel: resultSet.getLong(resultSet.getColumnIndex('risk_level'))
+      };
+      resultSet.close();
+      return row;
+    }
+    resultSet.close();
+    return null;
   }
 }

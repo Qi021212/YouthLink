@@ -10,7 +10,7 @@ import {
   DashboardSummary
 } from '../model/SchoolModels'
 import { common } from '@kit.AbilityKit'
-import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
+import { DatabaseHelper, HotlineCallRow, WorkOrderRow } from '../../../common/utils/DatabaseHelper'
 import { ActivityDBHelper, ActivityEditFields } from '../../../common/utils/ActivityDBHelper'
 import { MentalActivity } from '../../student/model/Activity'
 import { BookingService } from '../../student/service/BookingService'
@@ -34,195 +34,189 @@ interface TimeRange {
 export class SchoolService {
   /* ==================== S1 热线通话 ==================== */
   async fetchActiveCalls(): Promise<HotlineCall[]> {
-    const calls: HotlineCall[] = []
-    const c1: HotlineCall = new HotlineCall()
-    c1.callId = 'CALL-20250115-001'
-    c1.callerName = '陈思远'
-    c1.callerStudentId = '2023010201'
-    c1.phoneNumber = '138****6721'
-    c1.startTime = '2025-01-15 13:45'
-    c1.duration = 845
-    c1.status = CallStatus.ONGOING
-    c1.riskLevel = RiskLevel.HIGH
-    c1.tags = ['自杀意念', '重度抑郁', '学业压力']
-    c1.aiSummary = '来电者自述近两周持续失眠，频繁出现「活着没意思」的念头，昨天在宿舍阳台长时间站立发呆被室友发现。SDS量表58分，建议立即启动危机干预流程。'
-    calls.push(c1)
+    const db = DatabaseHelper.getInstance()
+    let rawCalls: HotlineCallRow[] = []
+    try {
+      rawCalls = await db.getActiveHotlineCalls()
+    } catch (e) {
+      console.error('Failed to get active calls from DB', e)
+    }
+    
+    if (rawCalls.length === 0) {
+      // 预置一些演示用的活跃通话数据到数据库
+      await db.addHotlineCall('CALL-20250115-001', '陈思远', '2023010201', '138****6721', '2025-01-15 13:45', 845, CallStatus.ONGOING, RiskLevel.HIGH, ['自杀意念', '重度抑郁', '学业压力'], '来电者自述近两周持续失眠，频繁出现「活着没意思」的念头，昨天在宿舍阳台长时间站立发呆被室友发现。SDS量表58分，建议立即启动危机干预流程。')
+      await db.addHotlineCall('CALL-20250115-002', '林小婉', '2024010503', '187****3459', '2025-01-15 14:20', 412, CallStatus.ONGOING, RiskLevel.MEDIUM, ['焦虑', '寝室矛盾'], '大一新生，因与室友作息不合引发冲突，近一周情绪低落、上课注意力不集中。正在进行情绪安抚并提供沟通技巧建议。')
+      await db.addHotlineCall('CALL-20250115-003', '王浩宇', '2023010312', '159****8023', '2025-01-15 15:05', 328, CallStatus.ONGOING, RiskLevel.LOW, ['情感困扰', '学业规划'], '大三学生因感情分手导致近期成绩下滑，对未来就业方向感到迷茫。情绪稳定，正在给予情感支持。')
+      await db.addHotlineCall('CALL-20250114-005', '匿名来电', '未登记', '176****0198', '2025-01-14 21:33', 920, CallStatus.ONGOING, RiskLevel.CRITICAL, ['自杀风险评估', '匿名求助'], '来电者拒绝透露身份，语速缓慢、多次停顿，提到「不想再拖累家人」。系统已标记极高风险，正在进行危机话术稳住对方。')
+      
+      try {
+        const newCalls = await db.getActiveHotlineCalls()
+        if (newCalls && newCalls.length > 0) {
+          return newCalls.map((r: HotlineCallRow) => {
+            const c = new HotlineCall()
+            c.callId = r.callId
+            c.callerName = r.callerName
+            c.callerStudentId = r.callerStudentId
+            c.phoneNumber = r.phoneNumber
+            c.startTime = r.startTime
+            c.duration = r.duration
+            c.status = r.status
+            c.riskLevel = r.riskLevel
+            c.tags = r.tags
+            c.aiSummary = r.aiSummary
+            return c
+          })
+        }
+      } catch (e) {
+        console.error('Failed to get new calls', e)
+      }
 
-    const c2: HotlineCall = new HotlineCall()
-    c2.callId = 'CALL-20250115-002'
-    c2.callerName = '林小婉'
-    c2.callerStudentId = '2024010503'
-    c2.phoneNumber = '187****3459'
-    c2.startTime = '2025-01-15 14:20'
-    c2.duration = 412
-    c2.status = CallStatus.COMPLETED
-    c2.riskLevel = RiskLevel.MEDIUM
-    c2.tags = ['焦虑', '寝室矛盾']
-    c2.aiSummary = '大一新生，因与室友作息不合引发冲突，近一周情绪低落、上课注意力不集中。已进行情绪安抚并提供沟通技巧建议，建议转介辅导员协调寝室调整。'
-    calls.push(c2)
+      // Fallback
+      const c1 = new HotlineCall(); c1.callId='CALL-20250115-001'; c1.callerName='陈思远'; c1.callerStudentId='2023010201'; c1.phoneNumber='138****6721'; c1.startTime='2025-01-15 13:45'; c1.duration=845; c1.status=CallStatus.ONGOING; c1.riskLevel=RiskLevel.HIGH; c1.tags=['自杀意念', '重度抑郁', '学业压力']; c1.aiSummary='来电者自述近两周持续失眠，频繁出现「活着没意思」的念头，昨天在宿舍阳台长时间站立发呆被室友发现。SDS量表58分，建议立即启动危机干预流程。';
+      const c2 = new HotlineCall(); c2.callId='CALL-20250115-002'; c2.callerName='林小婉'; c2.callerStudentId='2024010503'; c2.phoneNumber='187****3459'; c2.startTime='2025-01-15 14:20'; c2.duration=412; c2.status=CallStatus.ONGOING; c2.riskLevel=RiskLevel.MEDIUM; c2.tags=['焦虑', '寝室矛盾']; c2.aiSummary='大一新生，因与室友作息不合引发冲突，近一周情绪低落、上课注意力不集中。正在进行情绪安抚并提供沟通技巧建议。';
+      const c3 = new HotlineCall(); c3.callId='CALL-20250115-003'; c3.callerName='王浩宇'; c3.callerStudentId='2023010312'; c3.phoneNumber='159****8023'; c3.startTime='2025-01-15 15:05'; c3.duration=328; c3.status=CallStatus.ONGOING; c3.riskLevel=RiskLevel.LOW; c3.tags=['情感困扰', '学业规划']; c3.aiSummary='大三学生因感情分手导致近期成绩下滑，对未来就业方向感到迷茫。情绪稳定，正在给予情感支持。';
+      const c4 = new HotlineCall(); c4.callId='CALL-20250114-005'; c4.callerName='匿名来电'; c4.callerStudentId='未登记'; c4.phoneNumber='176****0198'; c4.startTime='2025-01-14 21:33'; c4.duration=920; c4.status=CallStatus.ONGOING; c4.riskLevel=RiskLevel.CRITICAL; c4.tags=['自杀风险评估', '匿名求助']; c4.aiSummary='来电者拒绝透露身份，语速缓慢、多次停顿，提到「不想再拖累家人」。系统已标记极高风险，正在进行危机话术稳住对方。';
+      return [c1, c2, c3, c4]
+    }
 
-    const c3: HotlineCall = new HotlineCall()
-    c3.callId = 'CALL-20250115-003'
-    c3.callerName = '王浩宇'
-    c3.callerStudentId = '2023010312'
-    c3.phoneNumber = '159****8023'
-    c3.startTime = '2025-01-15 15:05'
-    c3.duration = 328
-    c3.status = CallStatus.COMPLETED
-    c3.riskLevel = RiskLevel.LOW
-    c3.tags = ['情感困扰', '学业规划']
-    c3.aiSummary = '大三学生因感情分手导致近期成绩下滑，对未来就业方向感到迷茫。已给予情感支持和职业规划初步建议，预约下周面询继续跟进。'
-    calls.push(c3)
-
-    const c4: HotlineCall = new HotlineCall()
-    c4.callId = 'CALL-20250114-005'
-    c4.callerName = '匿名来电'
-    c4.callerStudentId = '未登记'
-    c4.phoneNumber = '176****0198'
-    c4.startTime = '2025-01-14 21:33'
-    c4.duration = 920
-    c4.status = CallStatus.MISSED
-    c4.riskLevel = RiskLevel.CRITICAL
-    c4.tags = ['自杀风险评估', '匿名求助']
-    c4.aiSummary = '来电者拒绝透露身份，语速缓慢、多次停顿，提到「不想再拖累家人」。通话中途断线，系统已标记极高风险，建议通过运营商协查定位。'
-    calls.push(c4)
-
-    return calls
+    return rawCalls.map((r: HotlineCallRow) => {
+      const c = new HotlineCall()
+      c.callId = r.callId
+      c.callerName = r.callerName
+      c.callerStudentId = r.callerStudentId
+      c.phoneNumber = r.phoneNumber
+      c.startTime = r.startTime
+      c.duration = r.duration
+      c.status = r.status
+      c.riskLevel = r.riskLevel
+      c.tags = r.tags
+      c.aiSummary = r.aiSummary
+      return c
+    })
   }
 
   /* ==================== S2 工单管理 ==================== */
+  /* ==================== S2 工单管理 ==================== */
   async fetchWorkOrders(): Promise<WorkOrder[]> {
-    const orders: WorkOrder[] = []
+    const db = DatabaseHelper.getInstance()
+    let rawOrders: WorkOrderRow[] = []
+    try {
+      rawOrders = await db.getAllWorkOrders()
+    } catch (e) {
+      console.error('Failed to get work orders from DB', e)
+    }
+    
+    if (rawOrders.length === 0) {
+      // 预置假数据
+      await db.addWorkOrder('WO-20250115-001', 'CALL-20250115-001', '陈思远', '2023010201', '危机干预', '学生来电暴露自杀意念，SDS评分58分，阳性质询后有短期自伤计划。心理咨询中心初步评估为重度抑郁发作，需要紧急精神科转诊和家长告知。', WorkOrderStatus.PROCESSING, '王明远 咨询师', '2025-01-15 14:00', RiskLevel.CRITICAL)
+      await db.addWorkOrder('WO-20250115-002', '', '林小婉', '2024010503', '寝室调解', '大一新生因寝室作息冲突产生人际关系紧张，影响到学习状态。需要辅导员介入协调寝室问题，并安排适应性心理辅导。', WorkOrderStatus.PENDING, '', '2025-01-15 14:30', RiskLevel.MEDIUM)
+      await db.addWorkOrder('WO-20250115-003', '', '周子涵', '2022010215', '情绪疏导', '大四学生因毕业论文进度滞后、秋招不顺利，出现焦虑躯体化症状（心悸、手抖），需要心理咨询和学业支持。', WorkOrderStatus.PENDING, '', '2025-01-15 10:15', RiskLevel.MEDIUM)
+      await db.addWorkOrder('WO-20250114-004', 'CALL-20250114-005', '匿名来电', '待确认', '紧急协查', '昨日21:33分匿名高危来电中途断线，已通过技术手段缩小定位范围至南区宿舍楼群。需立即启动紧急响应：通知保卫处协助排查，联系对应辅导员逐一核实。', WorkOrderStatus.PROCESSING, '校级心理中心应急组', '2025-01-14 21:45', RiskLevel.CRITICAL)
+      await db.addWorkOrder('WO-20250113-005', '', '刘雨晴', '2023010208', '学业支持', '学生因上学期挂科3门被列入学业预警名单，产生严重自我怀疑和逃避行为，已两周未去上课。需要联合辅导员和学业导师制定帮扶方案。', WorkOrderStatus.PROCESSING, '李梦 咨询师', '2025-01-13 09:00', RiskLevel.HIGH)
+      await db.addWorkOrder('WO-20250110-006', '', '吴昊天', '2023010651', '家长沟通', '学生在校期间多次参与赌博游戏，已被学校给予严重警告处分。家长主动联系中心请求心理干预，评估是否存在成瘾倾向。', WorkOrderStatus.COMPLETED, '赵明辉 咨询师', '2025-01-10 14:00', RiskLevel.HIGH)
+      
+      try {
+        const newOrders = await db.getAllWorkOrders()
+        if (newOrders && newOrders.length > 0) {
+          return newOrders.map((r: WorkOrderRow) => {
+            const o = new WorkOrder()
+            o.orderId = r.orderId
+            o.relatedCallId = r.relatedCallId
+            o.studentName = r.studentName
+            o.studentId = r.studentId
+            o.type = r.type
+            o.description = r.description
+            o.status = r.status
+            o.assignedTo = r.assignedTo
+            o.createdAt = r.createdAt
+            o.updatedAt = r.updatedAt
+            o.riskLevel = r.riskLevel
+            return o
+          })
+        }
+      } catch (e) {}
 
-    const o1: WorkOrder = new WorkOrder()
-    o1.orderId = 'WO-20250115-001'
-    o1.relatedCallId = 'CALL-20250115-001'
-    o1.studentName = '陈思远'
-    o1.studentId = '2023010201'
-    o1.type = '危机干预'
-    o1.description = '学生来电暴露自杀意念，SDS评分58分，阳性质询后有短期自伤计划。心理咨询中心初步评估为重度抑郁发作，需要紧急精神科转诊和家长告知。'
-    o1.status = WorkOrderStatus.PROCESSING
-    o1.assignedTo = '王明远 咨询师'
-    o1.createdAt = '2025-01-15 14:00'
-    o1.updatedAt = '2025-01-15 15:20'
-    o1.riskLevel = RiskLevel.CRITICAL
-    orders.push(o1)
+      // Fallback
+      const o1 = new WorkOrder(); o1.orderId='WO-20250115-001'; o1.studentName='陈思远'; o1.studentId='2023010201'; o1.type='危机干预'; o1.description='学生来电暴露自杀意念...'; o1.status=WorkOrderStatus.PROCESSING; o1.assignedTo='王明远 咨询师'; o1.createdAt='2025-01-15 14:00'; o1.riskLevel=RiskLevel.CRITICAL;
+      const o2 = new WorkOrder(); o2.orderId='WO-20250115-002'; o2.studentName='林小婉'; o2.studentId='2024010503'; o2.type='寝室调解'; o2.description='大一新生因寝室作息冲突...'; o2.status=WorkOrderStatus.PENDING; o2.assignedTo=''; o2.createdAt='2025-01-15 14:30'; o2.riskLevel=RiskLevel.MEDIUM;
+      const o3 = new WorkOrder(); o3.orderId='WO-20250115-003'; o3.studentName='周子涵'; o3.studentId='2022010215'; o3.type='情绪疏导'; o3.description='大四学生因毕业论文进度滞后...'; o3.status=WorkOrderStatus.PENDING; o3.assignedTo=''; o3.createdAt='2025-01-15 10:15'; o3.riskLevel=RiskLevel.MEDIUM;
+      const o4 = new WorkOrder(); o4.orderId='WO-20250114-004'; o4.studentName='匿名来电'; o4.studentId='待确认'; o4.type='紧急协查'; o4.description='昨日21:33分匿名高危来电...'; o4.status=WorkOrderStatus.PROCESSING; o4.assignedTo='校级心理中心应急组'; o4.createdAt='2025-01-14 21:45'; o4.riskLevel=RiskLevel.CRITICAL;
+      const o5 = new WorkOrder(); o5.orderId='WO-20250113-005'; o5.studentName='刘雨晴'; o5.studentId='2023010208'; o5.type='学业支持'; o5.description='学生因上学期挂科3门被列入学业预警名单...'; o5.status=WorkOrderStatus.PROCESSING; o5.assignedTo='李梦 咨询师'; o5.createdAt='2025-01-13 09:00'; o5.riskLevel=RiskLevel.HIGH;
+      const o6 = new WorkOrder(); o6.orderId='WO-20250110-006'; o6.studentName='吴昊天'; o6.studentId='2023010651'; o6.type='家长沟通'; o6.description='学生在校期间多次参与赌博游戏...'; o6.status=WorkOrderStatus.COMPLETED; o6.assignedTo='赵明辉 咨询师'; o6.createdAt='2025-01-10 14:00'; o6.riskLevel=RiskLevel.HIGH;
+      return [o1, o2, o3, o4, o5, o6]
+    }
 
-    const o2: WorkOrder = new WorkOrder()
-    o2.orderId = 'WO-20250115-002'
-    o2.studentName = '林小婉'
-    o2.studentId = '2024010503'
-    o2.type = '寝室调解'
-    o2.description = '大一新生因寝室作息冲突产生人际关系紧张，影响到学习状态。需要辅导员介入协调寝室问题，并安排适应性心理辅导。'
-    o2.status = WorkOrderStatus.PENDING
-    o2.assignedTo = ''
-    o2.createdAt = '2025-01-15 14:30'
-    o2.updatedAt = '2025-01-15 14:30'
-    o2.riskLevel = RiskLevel.MEDIUM
-    orders.push(o2)
-
-    const o3: WorkOrder = new WorkOrder()
-    o3.orderId = 'WO-20250115-003'
-    o3.studentName = '周子涵'
-    o3.studentId = '2022010215'
-    o3.type = '情绪疏导'
-    o3.description = '大四学生因毕业论文进度滞后、秋招不顺利，出现焦虑躯体化症状（心悸、手抖），需要心理咨询和学业支持。'
-    o3.status = WorkOrderStatus.PENDING
-    o3.assignedTo = ''
-    o3.createdAt = '2025-01-15 10:15'
-    o3.updatedAt = '2025-01-15 10:15'
-    o3.riskLevel = RiskLevel.MEDIUM
-    orders.push(o3)
-
-    const o4: WorkOrder = new WorkOrder()
-    o4.orderId = 'WO-20250114-004'
-    o4.studentName = '匿名来电'
-    o4.studentId = '待确认'
-    o4.type = '紧急协查'
-    o4.description = '昨日21:33分匿名高危来电中途断线，已通过技术手段缩小定位范围至南区宿舍楼群。需立即启动紧急响应：通知保卫处协助排查，联系对应辅导员逐一核实。'
-    o4.status = WorkOrderStatus.PROCESSING
-    o4.assignedTo = '校级心理中心应急组'
-    o4.createdAt = '2025-01-14 21:45'
-    o4.updatedAt = '2025-01-15 08:30'
-    o4.riskLevel = RiskLevel.CRITICAL
-    orders.push(o4)
-
-    const o5: WorkOrder = new WorkOrder()
-    o5.orderId = 'WO-20250113-005'
-    o5.studentName = '刘雨晴'
-    o5.studentId = '2023010208'
-    o5.type = '学业支持'
-    o5.description = '学生因上学期挂科3门被列入学业预警名单，产生严重自我怀疑和逃避行为，已两周未去上课。需要联合辅导员和学业导师制定帮扶方案。'
-    o5.status = WorkOrderStatus.PROCESSING
-    o5.assignedTo = '李梦 咨询师'
-    o5.createdAt = '2025-01-13 09:00'
-    o5.updatedAt = '2025-01-14 16:00'
-    o5.riskLevel = RiskLevel.HIGH
-    orders.push(o5)
-
-    const o6: WorkOrder = new WorkOrder()
-    o6.orderId = 'WO-20250110-006'
-    o6.studentName = '吴昊天'
-    o6.studentId = '2023010651'
-    o6.type = '家长沟通'
-    o6.description = '学生在校期间多次参与赌博游戏，已被学校给予严重警告处分。家长主动联系中心请求心理干预，评估是否存在成瘾倾向。'
-    o6.status = WorkOrderStatus.COMPLETED
-    o6.assignedTo = '赵明辉 咨询师'
-    o6.createdAt = '2025-01-10 14:00'
-    o6.updatedAt = '2025-01-12 17:00'
-    o6.riskLevel = RiskLevel.HIGH
-    orders.push(o6)
-
-    return orders
+    return rawOrders.map((r: WorkOrderRow) => {
+      const o = new WorkOrder()
+      o.orderId = r.orderId
+      o.relatedCallId = r.relatedCallId
+      o.studentName = r.studentName
+      o.studentId = r.studentId
+      o.type = r.type
+      o.description = r.description
+      o.status = r.status
+      o.assignedTo = r.assignedTo
+      o.createdAt = r.createdAt
+      o.updatedAt = r.updatedAt
+      o.riskLevel = r.riskLevel
+      return o
+    })
   }
 
   async fetchOrderTimeline(orderId: string): Promise<OrderTimelineNode[]> {
+    const db = DatabaseHelper.getInstance()
+    const row = await db.getWorkOrderById(orderId)
     const timeline: OrderTimelineNode[] = []
+    
+    if (!row) {
+      return timeline
+    }
 
-    const n1: OrderTimelineNode = new OrderTimelineNode()
-    n1.nodeId = 'TL-001'
+    // 节点1：创建
+    const n1 = new OrderTimelineNode()
+    n1.nodeId = 'TL-' + orderId + '-1'
     n1.orderId = orderId
-    n1.time = '2025-01-15 14:00'
+    n1.time = row.createdAt
     n1.action = '系统自动创建工单'
-    n1.operator = 'AI热线系统'
-    n1.remark = '根据热线 CALL-20250115-001 高危标记自动生成，风险等级：极高'
+    n1.operator = 'AI系统 / 自动调度'
+    n1.remark = '事件类型: ' + row.type
     timeline.push(n1)
 
-    const n2: OrderTimelineNode = new OrderTimelineNode()
-    n2.nodeId = 'TL-002'
-    n2.orderId = orderId
-    n2.time = '2025-01-15 14:10'
-    n2.action = '危机评估确认'
-    n2.operator = '值班管理员 张主任'
-    n2.remark = '确认为紧急危机干预事件，已电话联系咨询师王明远'
-    timeline.push(n2)
+    // 节点2：分配
+    if (row.status >= WorkOrderStatus.PROCESSING || row.assignedTo) {
+      const n2 = new OrderTimelineNode()
+      n2.nodeId = 'TL-' + orderId + '-2'
+      n2.orderId = orderId
+      n2.time = row.updatedAt
+      n2.action = '分配咨询师 / 处理中'
+      n2.operator = row.assignedTo || '未知咨询师'
+      n2.remark = '已开始跟进处理该工单'
+      timeline.push(n2)
+    }
+    
+    // 节点3：升级警告
+    if (row.riskLevel === RiskLevel.CRITICAL) {
+      const n3 = new OrderTimelineNode()
+      n3.nodeId = 'TL-' + orderId + '-3'
+      n3.orderId = orderId
+      n3.time = row.updatedAt
+      n3.action = '升级危险等级为【极危】'
+      n3.operator = '系统预警 / 负责人'
+      n3.remark = '已通知校级心理危机响应工作组介入！'
+      timeline.push(n3)
+    }
 
-    const n3: OrderTimelineNode = new OrderTimelineNode()
-    n3.nodeId = 'TL-003'
-    n3.orderId = orderId
-    n3.time = '2025-01-15 14:25'
-    n3.action = '分配咨询师'
-    n3.operator = '系统调度'
-    n3.remark = '分配给王明远咨询师（危机干预方向，从业8年）'
-    timeline.push(n3)
-
-    const n4: OrderTimelineNode = new OrderTimelineNode()
-    n4.nodeId = 'TL-004'
-    n4.orderId = orderId
-    n4.time = '2025-01-15 15:00'
-    n4.action = '咨询师接单'
-    n4.operator = '王明远 咨询师'
-    n4.remark = '已阅读全部通话记录和AI分析报告，正在前往咨询室面谈'
-    timeline.push(n4)
-
-    const n5: OrderTimelineNode = new OrderTimelineNode()
-    n5.nodeId = 'TL-005'
-    n5.orderId = orderId
-    n5.time = '2025-01-15 15:20'
-    n5.action = '面询开始'
-    n5.operator = '王明远 咨询师'
-    n5.remark = '已与学生在咨询室见面，初步进行风险评估访谈'
-    timeline.push(n5)
+    // 节点4：完成
+    if (row.status === WorkOrderStatus.COMPLETED) {
+      const n4 = new OrderTimelineNode()
+      n4.nodeId = 'TL-' + orderId + '-4'
+      n4.orderId = orderId
+      n4.time = row.updatedAt
+      n4.action = '工单处理完成并结案'
+      n4.operator = row.assignedTo || '系统'
+      n4.remark = '事件已闭环，归档处理'
+      timeline.push(n4)
+    }
 
     return timeline
   }

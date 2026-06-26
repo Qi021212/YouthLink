@@ -160,7 +160,7 @@ export class AuthService {
 
   private getMockName(account: string): string {
     const names: Record<string, string> = {
-      '2024001': '测试同学',
+      '2024001': '马超',
       'T10001': '王老师',
       'A10001': '李主任'
     }

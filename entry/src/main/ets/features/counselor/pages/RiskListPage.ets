@@ -2,6 +2,7 @@
 
 import { router } from '@kit.ArkUI';
 import { CounselorService, ClassDetailResult } from '../service/CounselorService';
+import { BasicDataSource } from '../../../common/utils/BasicDataSource';
 import {
   RiskStudent,
   RiskFilterParams,
@@ -42,7 +43,8 @@ class DormOption {
 struct RiskListPage {
   // ===== 状态变量 =====
   @State students: RiskStudent[] = [];
-  @State filteredStudents: RiskStudent[] = [];
+  filteredDataSource: BasicDataSource<RiskStudent> = new BasicDataSource<RiskStudent>();
+  @State filteredCount: number = 0;
   @State isLoading: boolean = true;
   @State errorMsg: string = '';
 
@@ -58,8 +60,6 @@ struct RiskListPage {
   @State selectedStudent: RiskStudent | null = null;
   @State isFilterExpanded: boolean = false;
 
-  // 用于强制刷新UI
-  @State refreshKey: number = 0;
   @State filterRefreshKey: number = 0;
 
   // 搜索关键词
@@ -116,7 +116,8 @@ struct RiskListPage {
       }
 
       this.students = allStudents;
-      this.filteredStudents = allStudents;
+      this.filteredDataSource.reloadData(allStudents);
+      this.filteredCount = allStudents.length;
 
       // 构建宿舍选项（包含"全部"）
       const dormOptions: DormOption[] = [];
@@ -127,7 +128,6 @@ struct RiskListPage {
       this.dormOptions = dormOptions;
       this.filteredDormOptions = dormOptions;
 
-      this.refreshKey++;
       this.filterRefreshKey++;
     } catch (error) {
       console.error('加载数据失败:', error);
@@ -187,8 +187,8 @@ struct RiskListPage {
         result = filtered;
       }
 
-      this.filteredStudents = result;
-      this.refreshKey++;
+      this.filteredDataSource.reloadData(result);
+      this.filteredCount = result.length;
       this.filterRefreshKey++;
     } catch (error) {
       console.error('筛选失败:', error);
@@ -281,7 +281,7 @@ struct RiskListPage {
         this.buildLoadingState();
       } else if (this.errorMsg !== '') {
         this.buildErrorState();
-      } else if (this.filteredStudents.length === 0) {
+      } else if (this.filteredCount === 0) {
         this.buildEmptyState();
       } else {
         this.buildStudentList();
@@ -305,7 +305,7 @@ struct RiskListPage {
 
       Blank()
 
-      Text('共 ' + this.filteredStudents.length + ' 人')
+      Text('共 ' + this.filteredCount + ' 人')
         .fontSize(14)
         .fontColor('#999999')
     }
@@ -487,11 +487,17 @@ struct RiskListPage {
   @Builder
   buildStudentList(): void {
     List() {
-      ForEach(this.filteredStudents, (student: RiskStudent) => {
+      LazyForEach(this.filteredDataSource, (student: RiskStudent) => {
         ListItem() {
-          this.buildStudentItem(student)
+          RiskStudentItem({
+            student: student,
+            onClickAction: () => {
+              this.showStudentProfile(student);
+            }
+          })
         }
-      }, (student: RiskStudent) => student.studentId + '_' + this.refreshKey)
+        .transition({ type: TransitionType.Insert, translate: { y: 50 }, opacity: 0 })
+      }, (student: RiskStudent) => student.studentId)
     }
     .width('100%')
     .layoutWeight(1)
@@ -502,88 +508,6 @@ struct RiskListPage {
       color: '#F0F0F0',
       startMargin: 56,
       endMargin: 0
-    })
-  }
-
-  @Builder
-  buildStudentItem(student: RiskStudent): void {
-    Row() {
-      Column() {
-        Text(getRiskLevelLabel(student.riskLevel))
-          .fontSize(10)
-          .fontColor('#FFFFFF')
-          .fontWeight(FontWeight.Medium)
-      }
-      .width(44)
-      .height(44)
-      .backgroundColor(getRiskLevelColor(student.riskLevel))
-      .borderRadius(22)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-
-      Column() {
-        Row() {
-          Text(student.name)
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor('#333333')
-
-          Text(student.studentId)
-            .fontSize(11)
-            .fontColor('#999999')
-            .margin({ left: 6 })
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-
-        Row() {
-          Text(student.gender + ' · ' + student.className)
-            .fontSize(12)
-            .fontColor('#666666')
-
-          Blank()
-
-          Text('寝室 ' + student.dormName)
-            .fontSize(12)
-            .fontColor('#666666')
-        }
-        .width('100%')
-        .margin({ top: 2 })
-
-        Row() {
-          Text('情绪分: ' + student.moodScore.toFixed(1))
-            .fontSize(11)
-            .fontColor('#999999')
-
-          Blank()
-
-          Text('更新: ' + student.lastUpdate)
-            .fontSize(11)
-            .fontColor('#999999')
-        }
-        .width('100%')
-        .margin({ top: 2 })
-      }
-      .layoutWeight(1)
-      .alignItems(HorizontalAlign.Start)
-      .margin({ left: 10 })
-
-      Column() {
-        Text('›')
-          .fontSize(18)
-          .fontColor('#CCCCCC')
-      }
-      .width(30)
-      .height(44)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-    }
-    .width('100%')
-    .padding({ top: 8, bottom: 8 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(8)
-    .onClick(() => {
-      this.showStudentProfile(student);
     })
   }
 
@@ -849,6 +773,111 @@ struct RiskListPage {
     }
     .width('100%')
     .padding({ top: 4, bottom: 4 })
+  }
+}
+
+@Reusable
+@Component
+struct RiskStudentItem {
+  @Prop student: RiskStudent;
+  onClickAction?: () => void;
+
+  aboutToReuse(params: Record<string, Object>): void {
+    this.student = params.student as RiskStudent;
+  }
+
+  build() {
+    Row() {
+      Column() {
+        Text(getRiskLevelLabel(this.student.riskLevel))
+          .fontSize(10)
+          .fontColor('#FFFFFF')
+          .fontWeight(FontWeight.Medium)
+      }
+      .width(44)
+      .height(44)
+      .backgroundColor(getRiskLevelColor(this.student.riskLevel))
+      .borderRadius(22)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+
+      Column() {
+        Row() {
+          Text(this.student.name)
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor('#333333')
+
+          Text(this.student.studentId)
+            .fontSize(11)
+            .fontColor('#999999')
+            .margin({ left: 6 })
+        }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+
+        Row() {
+          Text(this.student.gender + ' · ' + this.student.className)
+            .fontSize(12)
+            .fontColor('#666666')
+
+          Blank()
+
+          Text('寝室 ' + this.student.dormName)
+            .fontSize(12)
+            .fontColor('#666666')
+        }
+        .width('100%')
+        .margin({ top: 2 })
+
+        Row() {
+          Text('情绪分: ' + this.student.moodScore.toFixed(1))
+            .fontSize(11)
+            .fontColor('#999999')
+
+          Blank()
+
+          Text('更新: ' + this.student.lastUpdate)
+            .fontSize(11)
+            .fontColor('#999999')
+        }
+        .width('100%')
+        .margin({ top: 2 })
+      }
+      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start)
+      .margin({ left: 10 })
+
+      Column() {
+        Text('›')
+          .fontSize(18)
+          .fontColor('#CCCCCC')
+      }
+      .width(30)
+      .height(44)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+    }
+    .width('100%')
+    .padding({ top: 8, bottom: 8 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .onClick(() => {
+      if (this.onClickAction) {
+        this.onClickAction();
+      }
+    })
+    .animation({ duration: 250, curve: Curve.Friction })
+    .stateStyles({
+      pressed: {
+        .scale({ x: 0.98, y: 0.98 })
+        .opacity(0.9)
+      },
+      normal: {
+        .scale({ x: 1.0, y: 1.0 })
+        .opacity(1.0)
+      }
+    })
   }
 }
 

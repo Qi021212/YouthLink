@@ -244,6 +244,17 @@ struct StudentHomePage {
             .onClick(() => {
               router.pushUrl({ url: item.route })
             })
+            .animation({ duration: 250, curve: Curve.Friction })
+            .stateStyles({
+              pressed: {
+                .scale({ x: 0.96, y: 0.96 })
+                .opacity(0.9)
+              },
+              normal: {
+                .scale({ x: 1.0, y: 1.0 })
+                .opacity(1.0)
+              }
+            })
           }
           .margin({ bottom: 14 })
         })
@@ -359,6 +370,17 @@ struct StudentHomePage {
                   this.currentIndex = 1
                   this.tabsController.changeIndex(1)
                 })
+                .animation({ duration: 250, curve: Curve.Friction })
+                .stateStyles({
+                  pressed: {
+                    .scale({ x: 0.94, y: 0.94 })
+                    .opacity(0.8)
+                  },
+                  normal: {
+                    .scale({ x: 1.0, y: 1.0 })
+                    .opacity(1.0)
+                  }
+                })
               }
 
               GridItem() {
@@ -378,6 +400,17 @@ struct StudentHomePage {
                 .onClick(() => {
                   this.currentIndex = 2
                   this.tabsController.changeIndex(2)
+                })
+                .animation({ duration: 250, curve: Curve.Friction })
+                .stateStyles({
+                  pressed: {
+                    .scale({ x: 0.94, y: 0.94 })
+                    .opacity(0.8)
+                  },
+                  normal: {
+                    .scale({ x: 1.0, y: 1.0 })
+                    .opacity(1.0)
+                  }
                 })
               }
 
@@ -399,6 +432,17 @@ struct StudentHomePage {
                   this.currentIndex = 3
                   this.tabsController.changeIndex(3)
                 })
+                .animation({ duration: 250, curve: Curve.Friction })
+                .stateStyles({
+                  pressed: {
+                    .scale({ x: 0.94, y: 0.94 })
+                    .opacity(0.8)
+                  },
+                  normal: {
+                    .scale({ x: 1.0, y: 1.0 })
+                    .opacity(1.0)
+                  }
+                })
               }
 
               GridItem() {
@@ -418,6 +462,17 @@ struct StudentHomePage {
                 .onClick(() => {
                   this.currentIndex = 4
                   this.tabsController.changeIndex(4)
+                })
+                .animation({ duration: 250, curve: Curve.Friction })
+                .stateStyles({
+                  pressed: {
+                    .scale({ x: 0.94, y: 0.94 })
+                    .opacity(0.8)
+                  },
+                  normal: {
+                    .scale({ x: 1.0, y: 1.0 })
+                    .opacity(1.0)
+                  }
                 })
               }
             }

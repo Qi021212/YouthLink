@@ -1,27 +1,11 @@
 {
   "app": {
-    "signingConfigs": [
-      {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "C:\\Users\\33778\\.ohos\\config\\default_YouthLink_3md5PGFtHOhs9xPOrWMO461YqdWTjwcYZrB0xwu-V-U=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001A1D948F5247622046745414FB88BAD28280EBF17BD0929B905D1EDE6B3373C9B8209E28F9EF91",
-          "profile": "C:\\Users\\33778\\.ohos\\config\\default_YouthLink_3md5PGFtHOhs9xPOrWMO461YqdWTjwcYZrB0xwu-V-U=.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\33778\\.ohos\\config\\default_YouthLink_3md5PGFtHOhs9xPOrWMO461YqdWTjwcYZrB0xwu-V-U=.p12",
-          "storePassword": "0000001A689137766FE6D7CC8C2C34D58EB4BEC5DE2173FECEFBBE64D942F4B224D8605F7E1F6B6769B6"
-        }
-      }
-    ],
     "products": [
       {
         "name": "default",
         "targetSdkVersion": "6.1.0(23)",
         "compatibleSdkVersion": "6.1.0(23)",
         "runtimeOS": "HarmonyOS",
-        "signingConfig": "default",
         "buildOption": {
           "strictMode": {
             "caseSensitiveCheck": true,
