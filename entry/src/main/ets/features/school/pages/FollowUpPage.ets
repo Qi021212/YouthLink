@@ -1,8 +1,10 @@
-import { router } from '@kit.ArkUI'
+import { router, promptAction } from '@kit.ArkUI'
+import { common } from '@kit.AbilityKit'
 import { Colors } from '../../../common/constants/Colors'
 import { FollowUpTask, FollowUpPriority } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
 import { RiskBadge } from '../../../common/components/RiskBadge'
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
 
 @Entry
 @Component
@@ -12,7 +14,13 @@ struct FollowUpPage {
   private service: SchoolService = new SchoolService()
 
   async aboutToAppear(): Promise<void> {
+    await this.loadTasks()
+  }
+
+  async loadTasks(): Promise<void> {
+    this.isLoading = true
     try {
+      await DatabaseHelper.getInstance().ensureInit(getContext(this) as common.UIAbilityContext)
       this.tasks = await this.service.fetchFollowUpTasks()
     } catch (e) {
       this.tasks = []
@@ -21,12 +29,31 @@ struct FollowUpPage {
     }
   }
 
+  async handleMarkDone(task: FollowUpTask): Promise<void> {
+    await this.service.markFollowUpDone(task.taskId)
+    await this.loadTasks()
+  }
+
+  async handleUndo(task: FollowUpTask): Promise<void> {
+    await this.service.markFollowUpUndone(task.taskId)
+    await this.loadTasks()
+  }
+
+  // 模拟拨号：仅提示，不真正调起系统电话
+  handleContact(task: FollowUpTask): void {
+    promptAction.showToast({ message: '正在为「' + task.studentName + '」接通心理援助专线…', duration: 2000 })
+  }
+
   private getUrgentTasks(): FollowUpTask[] {
     return this.tasks.filter((t: FollowUpTask) => t.priority === FollowUpPriority.URGENT && !t.completed)
   }
 
   private getNormalTasks(): FollowUpTask[] {
     return this.tasks.filter((t: FollowUpTask) => t.priority === FollowUpPriority.NORMAL && !t.completed)
+  }
+
+  private getDoneTasks(): FollowUpTask[] {
+    return this.tasks.filter((t: FollowUpTask) => t.completed)
   }
 
   private getPriorityColor(priority: FollowUpPriority): string {
@@ -57,7 +84,17 @@ struct FollowUpPage {
         .layoutWeight(1)
 
         Column() {
-          RiskBadge({ riskLevel: task.riskLevel })
+          if (task.completed) {
+            Text('✓ 已完成')
+              .fontSize(12)
+              .fontColor(Colors.SUCCESS)
+              .fontWeight(FontWeight.Medium)
+              .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+              .borderRadius(4)
+              .backgroundColor('#DCFCE7')
+          } else {
+            RiskBadge({ riskLevel: task.riskLevel })
+          }
         }
       }
       .width('100%')
@@ -89,33 +126,49 @@ struct FollowUpPage {
       .width('100%')
       .margin({ top: 10 })
 
-      Row() {
-        Button('标记完成')
-          .fontSize(13)
-          .fontColor(Colors.TEXT_ON_PRIMARY)
-          .backgroundColor(Colors.SUCCESS)
-          .borderRadius(8)
-          .height(36)
-          .layoutWeight(1)
-          .onClick(() => { task.completed = true })
+      if (task.completed) {
+        Row() {
+          Button('撤销完成')
+            .fontSize(13)
+            .fontColor(Colors.TEXT_SECONDARY)
+            .backgroundColor('#F3F4F6')
+            .borderRadius(8)
+            .height(36)
+            .layoutWeight(1)
+            .onClick(() => { this.handleUndo(task) })
+        }
+        .width('100%')
+        .margin({ top: 12 })
+      } else {
+        Row() {
+          Button('标记完成')
+            .fontSize(13)
+            .fontColor(Colors.TEXT_ON_PRIMARY)
+            .backgroundColor(Colors.SUCCESS)
+            .borderRadius(8)
+            .height(36)
+            .layoutWeight(1)
+            .onClick(() => { this.handleMarkDone(task) })
 
-        Button('联系学生')
-          .fontSize(13)
-          .fontColor(Colors.PRIMARY)
-          .backgroundColor(Colors.PRIMARY + '15')
-          .borderRadius(8)
-          .height(36)
-          .layoutWeight(1)
-          .margin({ left: 10 })
-          .onClick(() => {})
+          Button('联系学生')
+            .fontSize(13)
+            .fontColor(Colors.PRIMARY)
+            .backgroundColor(Colors.PRIMARY + '15')
+            .borderRadius(8)
+            .height(36)
+            .layoutWeight(1)
+            .margin({ left: 10 })
+            .onClick(() => { this.handleContact(task) })
+        }
+        .width('100%')
+        .margin({ top: 12 })
       }
-      .width('100%')
-      .margin({ top: 12 })
     }
     .width('100%')
     .padding(16)
     .backgroundColor(Colors.CARD_BG)
     .borderRadius(12)
+    .opacity(task.completed ? 0.75 : 1)
     .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
     .margin({ bottom: 10 })
   }
@@ -174,6 +227,21 @@ struct FollowUpPage {
             }
 
             ForEach(this.getNormalTasks(), (task: FollowUpTask) => {
+              ListItem() { this.TaskCard(task) }
+            })
+          }
+
+          if (this.getDoneTasks().length > 0) {
+            ListItem() {
+              Text('已完成 (' + this.getDoneTasks().length + ')')
+                .fontSize(15)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Colors.SUCCESS)
+                .padding({ left: 16, top: 12, bottom: 8 })
+                .width('100%')
+            }
+
+            ForEach(this.getDoneTasks(), (task: FollowUpTask) => {
               ListItem() { this.TaskCard(task) }
             })
           }

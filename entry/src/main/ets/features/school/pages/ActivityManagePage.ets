@@ -1,9 +1,11 @@
-import { router } from '@kit.ArkUI'
+import { router, promptAction } from '@kit.ArkUI'
+import { common } from '@kit.AbilityKit'
 import { Colors } from '../../../common/constants/Colors'
 import { RouterPath } from '../../../common/constants/RouterPath'
 import { StatusChip } from '../../../common/components/StatusChip'
 import { Activity, ActivityStatus, EfficiencyReport } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
+import { ActivityEditFields } from '../../../common/utils/ActivityDBHelper'
 
 class FilterTab {
   label: string = ''
@@ -23,6 +25,15 @@ struct ActivityManagePage {
   @State showEfficiencySheet: boolean = false
   @State efficiencyReport: EfficiencyReport | null = null
   @State currentActivityTitle: string = ''
+  // 编辑面板状态
+  @State showEditSheet: boolean = false
+  @State editId: string = ''
+  @State editTitle: string = ''
+  @State editType: string = ''
+  @State editStartTime: string = ''
+  @State editEndTime: string = ''
+  @State editLocation: string = ''
+  @State editStatus: ActivityStatus = ActivityStatus.DRAFT
   private service: SchoolService = new SchoolService()
 
   private filterTabs: FilterTab[] = [
@@ -34,13 +45,83 @@ struct ActivityManagePage {
   ]
 
   async aboutToAppear(): Promise<void> {
+    await this.loadActivities()
+  }
+
+  // 从其它页面返回时刷新，让学生新报名的人数变化即时反映
+  async onPageShow(): Promise<void> {
+    await this.loadActivities()
+  }
+
+  async loadActivities(): Promise<void> {
     try {
-      this.activities = await this.service.fetchActivities()
+      this.activities = await this.service.fetchActivities(getContext(this) as common.Context)
     } catch (e) {
       this.activities = []
     } finally {
       this.isLoading = false
     }
+  }
+
+  // 打开编辑面板，回填当前活动信息
+  openEdit(item: Activity): void {
+    this.editId = item.activityId
+    this.editTitle = item.title
+    this.editType = item.type
+    this.editStartTime = item.startDate
+    this.editEndTime = item.endDate
+    this.editLocation = this.extractLocation(item.description)
+    this.editStatus = item.status
+    this.showEditSheet = true
+  }
+
+  // 描述形如 "面向「X」状态学生 · 地点：YYY"，取出地点部分回填
+  private extractLocation(desc: string): string {
+    const marker: string = '地点：'
+    const idx: number = desc.indexOf(marker)
+    if (idx >= 0) {
+      return desc.substring(idx + marker.length)
+    }
+    return ''
+  }
+
+  // 起止相同（单时间点）只显示一个时间，否则显示时间段
+  private formatTimeRange(start: string, end: string): string {
+    if (end.length === 0 || start === end) {
+      return start
+    }
+    return start + ' ~ ' + end
+  }
+
+  async saveEdit(): Promise<void> {
+    if (this.editTitle.trim().length === 0) {
+      promptAction.showToast({ message: '活动标题不能为空' })
+      return
+    }
+    // 起止时间合并为 "开始 ~ 结束" 写回；结束留空则按单时间点存
+    const timeText: string = this.editEndTime.trim().length > 0
+      ? this.editStartTime.trim() + ' ~ ' + this.editEndTime.trim()
+      : this.editStartTime.trim()
+    const fields: ActivityEditFields = {
+      title: this.editTitle,
+      type: this.editType,
+      time: timeText,
+      location: this.editLocation
+    }
+    const ok: boolean = await this.service.updateActivity(this.editId, fields, getContext(this) as common.Context)
+    // 状态变更单独持久化（学校端覆盖值，仅在活动开始前生效）
+    await this.service.setActivityStatus(this.editId, this.editStatus)
+    this.showEditSheet = false
+    promptAction.showToast({ message: ok ? '已保存，学生端同步更新' : '保存失败' })
+    await this.loadActivities()
+  }
+
+  async approveActivity(): Promise<void> {
+    await this.service.setActivityStatus(this.editId, ActivityStatus.APPROVED)
+    this.editStatus = ActivityStatus.APPROVED
+    this.showEditSheet = false
+    promptAction.showToast({ message: '活动已批准' })
+    await this.loadActivities()
   }
 
   private getFilteredActivities(): Activity[] {
@@ -97,7 +178,7 @@ struct ActivityManagePage {
           .borderRadius(4)
           .backgroundColor(Colors.PRIMARY_LIGHT)
         Text(' ')
-        Text(item.startDate + ' ~ ' + item.endDate)
+        Text(this.formatTimeRange(item.startDate, item.endDate))
           .fontSize(12)
           .fontColor(Colors.TEXT_HINT)
       }
@@ -126,6 +207,9 @@ struct ActivityManagePage {
           .fontSize(13)
           .fontColor('#F59E0B')
           .fontWeight(FontWeight.Medium)
+        Text(' 学生评分')
+          .fontSize(11)
+          .fontColor(Colors.TEXT_HINT)
 
         Blank()
 
@@ -156,13 +240,13 @@ struct ActivityManagePage {
     .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
     .margin({ bottom: 12 })
     .onClick(() => {
-      router.pushUrl({ url: RouterPath.ACTIVITY_MANAGE })
+      this.openEdit(item)
     })
   }
 
   async loadEfficiencyReport(activityId: string): Promise<void> {
     try {
-      this.efficiencyReport = await this.service.fetchEfficiencyReport(activityId)
+      this.efficiencyReport = await this.service.fetchEfficiencyReport(activityId, getContext(this) as common.Context)
     } catch (e) {
       this.efficiencyReport = null
     }
@@ -205,6 +289,96 @@ struct ActivityManagePage {
           .width('100%')
           .justifyContent(FlexAlign.SpaceBetween)
         }
+      }
+      .width('100%')
+      .padding(24)
+      .backgroundColor(Colors.CARD_BG)
+      .borderRadius({ topLeft: 16, topRight: 16 })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.End)
+  }
+
+  @Builder
+  EditSheet() {
+    Column() {
+      Column() {
+        Row() {
+          Text('编辑活动')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Colors.TEXT_PRIMARY)
+          Blank()
+          Text('✕')
+            .fontSize(18)
+            .fontColor(Colors.TEXT_HINT)
+            .onClick(() => { this.showEditSheet = false })
+        }
+        .width('100%')
+        .margin({ bottom: 20 })
+
+        Text('活动标题')
+          .fontSize(13).fontColor(Colors.TEXT_SECONDARY)
+          .alignSelf(ItemAlign.Start).margin({ bottom: 6 })
+        TextInput({ text: this.editTitle })
+          .fontSize(15).backgroundColor('#F3F4F6').borderRadius(10).height(44)
+          .margin({ bottom: 14 })
+          .onChange((v: string) => { this.editTitle = v })
+
+        Text('活动类型')
+          .fontSize(13).fontColor(Colors.TEXT_SECONDARY)
+          .alignSelf(ItemAlign.Start).margin({ bottom: 6 })
+        TextInput({ text: this.editType })
+          .fontSize(15).backgroundColor('#F3F4F6').borderRadius(10).height(44)
+          .margin({ bottom: 14 })
+          .onChange((v: string) => { this.editType = v })
+
+        Text('开始时间')
+          .fontSize(13).fontColor(Colors.TEXT_SECONDARY)
+          .alignSelf(ItemAlign.Start).margin({ bottom: 6 })
+        TextInput({ text: this.editStartTime, placeholder: '2026-06-12 19:00' })
+          .fontSize(15).backgroundColor('#F3F4F6').borderRadius(10).height(44)
+          .margin({ bottom: 14 })
+          .onChange((v: string) => { this.editStartTime = v })
+
+        Text('结束时间')
+          .fontSize(13).fontColor(Colors.TEXT_SECONDARY)
+          .alignSelf(ItemAlign.Start).margin({ bottom: 6 })
+        TextInput({ text: this.editEndTime, placeholder: '2026-06-12 21:00' })
+          .fontSize(15).backgroundColor('#F3F4F6').borderRadius(10).height(44)
+          .margin({ bottom: 14 })
+          .onChange((v: string) => { this.editEndTime = v })
+
+        Text('活动地点')
+          .fontSize(13).fontColor(Colors.TEXT_SECONDARY)
+          .alignSelf(ItemAlign.Start).margin({ bottom: 6 })
+        TextInput({ text: this.editLocation })
+          .fontSize(15).backgroundColor('#F3F4F6').borderRadius(10).height(44)
+          .margin({ bottom: 14 })
+          .onChange((v: string) => { this.editLocation = v })
+
+        Row() {
+          Button('批准活动')
+            .fontSize(15)
+            .fontColor(Colors.TEXT_ON_PRIMARY)
+            .backgroundColor(Colors.SUCCESS)
+            .borderRadius(10)
+            .height(46)
+            .layoutWeight(1)
+            .onClick(() => { this.approveActivity() })
+
+          Button('保存修改')
+            .fontSize(15)
+            .fontColor(Colors.TEXT_ON_PRIMARY)
+            .backgroundColor(Colors.PRIMARY)
+            .borderRadius(10)
+            .height(46)
+            .layoutWeight(1)
+            .margin({ left: 12 })
+            .onClick(() => { this.saveEdit() })
+        }
+        .width('100%')
+        .margin({ top: 8 })
       }
       .width('100%')
       .padding(24)
@@ -307,6 +481,20 @@ struct ActivityManagePage {
             .layoutWeight(1)
             .onClick(() => { this.showEfficiencySheet = false })
           this.EfficiencyReportSheet()
+        }
+        .width('100%')
+        .height('100%')
+        .position({ x: 0, y: 0 })
+        .backgroundColor('rgba(0, 0, 0, 0.4)')
+      }
+
+      if (this.showEditSheet) {
+        Column() {
+          Column()
+            .width('100%')
+            .layoutWeight(1)
+            .onClick(() => { this.showEditSheet = false })
+          this.EditSheet()
         }
         .width('100%')
         .height('100%')

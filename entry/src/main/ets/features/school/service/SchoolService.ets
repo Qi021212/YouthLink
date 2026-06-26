@@ -9,6 +9,27 @@ import {
   EfficiencyReport,
   DashboardSummary
 } from '../model/SchoolModels'
+import { common } from '@kit.AbilityKit'
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
+import { ActivityDBHelper, ActivityEditFields } from '../../../common/utils/ActivityDBHelper'
+import { MentalActivity } from '../../student/model/Activity'
+import { BookingService } from '../../student/service/BookingService'
+import { BookingDTO } from '../../student/model/BookingModel'
+import { ReportData } from '../../../common/model/ReportModel'
+import { getString, putString } from '../../../common/utils/StorageUtil'
+import { ActivityFeedbackStore, ActivityFeedback } from '../../../common/utils/ActivityFeedbackStore'
+
+// 学校端自身可变状态的持久化 key（不污染学生端/教师端数据）
+const FOLLOWUP_DONE_KEY: string = 'school_followup_done'
+const ACTIVITY_STATUS_KEY: string = 'school_activity_status'
+
+// 活动时间段解析结果（时间戳 + 原始文本）
+interface TimeRange {
+  start: number
+  end: number
+  startText: string
+  endText: string
+}
 
 export class SchoolService {
   /* ==================== S1 热线通话 ==================== */
@@ -361,197 +382,333 @@ export class SchoolService {
   }
 
   /* ==================== S5 高危随访 ==================== */
+  /**
+   * 高危随访任务来源：学生端提交的半月报（reports 表）。
+   * 学生做完 AI 测评后，凡是被评为「中风险」及以上的报告，自动注入为一条随访任务，
+   * 风险越高优先级越高、随访时限越短。完成状态由学校端自己持久化，不回写学生数据。
+   */
   async fetchFollowUpTasks(): Promise<FollowUpTask[]> {
+    const db: DatabaseHelper = DatabaseHelper.getInstance()
+    const reports: ReportData[] = await db.getAllReports()
+    const doneSet: string[] = await this.loadFollowUpDoneIds()
+
     const tasks: FollowUpTask[] = []
+    reports.forEach((r: ReportData) => {
+      const level: RiskLevel = this.mapReportRisk(r.riskLevel)
+      // 低风险不需要随访
+      if (level < RiskLevel.MEDIUM) {
+        return
+      }
 
-    const t1: FollowUpTask = new FollowUpTask()
-    t1.taskId = 'FU-20250115-001'
-    t1.studentName = '陈思远'
-    t1.studentId = '2023010201'
-    t1.reason = '自杀意念高危随访 —— 每日2次电话确认安全'
-    t1.deadline = '2025-01-16'
-    t1.priority = FollowUpPriority.URGENT
-    t1.completed = false
-    t1.riskLevel = RiskLevel.CRITICAL
-    tasks.push(t1)
+      const t: FollowUpTask = new FollowUpTask()
+      t.taskId = 'FU-' + r.id
+      t.studentName = r.studentName
+      t.studentId = r.className                 // students 表无学号，用班级标识
+      t.reason = r.aiCounselorSummary           // 直接复用 AI 生成的辅导员预审摘要
+      t.riskLevel = level
+      t.priority = level >= RiskLevel.HIGH ? FollowUpPriority.URGENT : FollowUpPriority.NORMAL
+      t.deadline = this.calcFollowUpDeadline(r.submitTime, level)
+      t.completed = doneSet.indexOf(t.taskId) >= 0
+      tasks.push(t)
+    })
 
-    const t2: FollowUpTask = new FollowUpTask()
-    t2.taskId = 'FU-20250115-002'
-    t2.studentName = '匿名来电'
-    t2.studentId = '待确认'
-    t2.reason = '昨夜高危匿名来电身份排查 —— 需最终确认来电者身份并建立联系方式'
-    t2.deadline = '2025-01-15'
-    t2.priority = FollowUpPriority.URGENT
-    t2.completed = false
-    t2.riskLevel = RiskLevel.CRITICAL
-    tasks.push(t2)
-
-    const t3: FollowUpTask = new FollowUpTask()
-    t3.taskId = 'FU-20250115-003'
-    t3.studentName = '刘雨晴'
-    t3.studentId = '2023010208'
-    t3.reason = '学业预警后续跟进 —— 确认是否已恢复上课，评估心理状态'
-    t3.deadline = '2025-01-17'
-    t3.priority = FollowUpPriority.URGENT
-    t3.completed = false
-    t3.riskLevel = RiskLevel.HIGH
-    tasks.push(t3)
-
-    const t4: FollowUpTask = new FollowUpTask()
-    t4.taskId = 'FU-20250115-004'
-    t4.studentName = '吴昊天'
-    t4.studentId = '2023010651'
-    t4.reason = '赌博行为成瘾评估跟进 —— 检查戒赌承诺执行情况'
-    t4.deadline = '2025-01-20'
-    t4.priority = FollowUpPriority.NORMAL
-    t4.completed = false
-    t4.riskLevel = RiskLevel.HIGH
-    tasks.push(t4)
-
-    const t5: FollowUpTask = new FollowUpTask()
-    t5.taskId = 'FU-20250115-005'
-    t5.studentName = '孙浩然'
-    t5.studentId = '2022010234'
-    t5.reason = '考研失败情绪低落持续跟进 —— 就业推荐是否落地'
-    t5.deadline = '2025-01-22'
-    t5.priority = FollowUpPriority.NORMAL
-    t5.completed = false
-    t5.riskLevel = RiskLevel.MEDIUM
-    tasks.push(t5)
-
-    const t6: FollowUpTask = new FollowUpTask()
-    t6.taskId = 'FU-20250110-006'
-    t6.studentName = '赵雅涵'
-    t6.studentId = '2024010882'
-    t6.reason = '社交焦虑分级暴露训练完成度检查'
-    t6.deadline = '2025-01-18'
-    t6.priority = FollowUpPriority.NORMAL
-    t6.completed = false
-    t6.riskLevel = RiskLevel.MEDIUM
-    tasks.push(t6)
-
+    // 高风险优先、其次按截止时间靠前
+    tasks.sort((a: FollowUpTask, b: FollowUpTask): number => {
+      if (a.riskLevel !== b.riskLevel) {
+        return b.riskLevel - a.riskLevel
+      }
+      return a.deadline < b.deadline ? -1 : 1
+    })
     return tasks
   }
 
-  /* ==================== S6 心理活动 ==================== */
-  async fetchActivities(): Promise<Activity[]> {
-    const activities: Activity[] = []
-
-    const a1: Activity = new Activity()
-    a1.activityId = 'ACT-202501-001'
-    a1.title = '正念减压八周训练营'
-    a1.type = '团体辅导'
-    a1.description = '基于MBSR体系的八周结构化正念训练课程，涵盖身体扫描、静坐冥想、正念瑜伽等，目标帮助参与者掌握压力管理核心技能。每周三下午16:00-17:30，活动中心306室。'
-    a1.status = ActivityStatus.IN_PROGRESS
-    a1.startDate = '2024-12-04'
-    a1.endDate = '2025-02-05'
-    a1.organizer = '校级心理中心'
-    a1.participants = 28
-    a1.satisfaction = 4.5
-    activities.push(a1)
-
-    const a2: Activity = new Activity()
-    a2.activityId = 'ACT-202502-002'
-    a2.title = '2025春季心理健康月开幕式'
-    a2.type = '大型活动'
-    a2.description = '年度心理健康主题活动启动，含心理学专家讲座《压力与韧性》、VR心理体验馆、心理剧表演等。2月20日全天，学活中心广场。'
-    a2.status = ActivityStatus.APPROVED
-    a2.startDate = '2025-02-20'
-    a2.endDate = '2025-02-20'
-    a2.organizer = '学工部 × 校级心理中心'
-    a2.participants = 0
-    a2.satisfaction = 0
-    activities.push(a2)
-
-    const a3: Activity = new Activity()
-    a3.activityId = 'ACT-202409-003'
-    a3.title = '2024级新生心理健康普查'
-    a3.type = '测评筛查'
-    a3.description = '面向全体2024级新生的心理健康普查（UPI+SCL-90联合施测），覆盖5200名新生，筛查出需关注学生约480人。'
-    a3.status = ActivityStatus.COMPLETED
-    a3.startDate = '2024-09-15'
-    a3.endDate = '2024-09-30'
-    a3.organizer = '校级心理中心'
-    a3.participants = 5200
-    a3.satisfaction = 4.2
-    activities.push(a3)
-
-    const a4: Activity = new Activity()
-    a4.activityId = 'ACT-202503-004'
-    a4.title = '3·25 善爱我户外心理游园会'
-    a4.type = '主题活动'
-    a4.description = '「善待自己，拥抱情绪」主题游园，设8个互动摊位：情绪雕塑、烦恼甩甩乐、优点轰炸墙、沙盘游戏体验等。'
-    a4.status = ActivityStatus.DRAFT
-    a4.startDate = '2025-03-25'
-    a4.endDate = '2025-03-25'
-    a4.organizer = '校级心理中心'
-    a4.participants = 0
-    a4.satisfaction = 0
-    activities.push(a4)
-
-    const a5: Activity = new Activity()
-    a5.activityId = 'ACT-202501-005'
-    a5.title = '辅导员心理危机识别沙龙'
-    a5.type = '培训讲座'
-    a5.description = '面向全体辅导员举办的心理危机识别与干预技能培训，由市精神卫生中心专家主讲，内容包括危机信号识别、初次接触技巧、转诊流程。'
-    a5.status = ActivityStatus.IN_PROGRESS
-    a5.startDate = '2025-01-10'
-    a5.endDate = '2025-01-17'
-    a5.organizer = '学工部'
-    a5.participants = 46
-    a5.satisfaction = 4.8
-    activities.push(a5)
-
-    const a6: Activity = new Activity()
-    a6.activityId = 'ACT-202501-006'
-    a6.title = '考试焦虑应对工作坊'
-    a6.type = '团体辅导'
-    a6.description = '针对期末考试前夕的焦虑管理工作坊，教授呼吸放松法、积极意象训练和时间管理五步法，每次容纳15-20人。'
-    a6.status = ActivityStatus.IN_PROGRESS
-    a6.startDate = '2025-01-06'
-    a6.endDate = '2025-01-18'
-    a6.organizer = '校级心理中心'
-    a6.participants = 42
-    a6.satisfaction = 4.3
-    activities.push(a6)
-
-    const a7: Activity = new Activity()
-    a7.activityId = 'ACT-202502-007'
-    a7.title = '朋辈心理辅导员初级培训'
-    a7.type = '培训讲座'
-    a7.description = '面向各学院心理委员的朋辈辅导技能培训，含倾听技术、共情训练、危机转介等模块，考核通过颁发初级证书。'
-    a7.status = ActivityStatus.DRAFT
-    a7.startDate = '2025-02-25'
-    a7.endDate = '2025-03-15'
-    a7.organizer = '校级心理中心'
-    a7.participants = 0
-    a7.satisfaction = 0
-    activities.push(a7)
-
-    return activities
+  /**
+   * 标记一条随访任务为已完成（持久化到学校端 preferences，刷新后不丢失）
+   */
+  async markFollowUpDone(taskId: string): Promise<void> {
+    const doneSet: string[] = await this.loadFollowUpDoneIds()
+    if (doneSet.indexOf(taskId) < 0) {
+      doneSet.push(taskId)
+      await putString(FOLLOWUP_DONE_KEY, JSON.stringify(doneSet))
+    }
   }
 
-  async fetchEfficiencyReport(activityId: string): Promise<EfficiencyReport> {
+  /**
+   * 撤销一条随访任务的完成状态
+   */
+  async markFollowUpUndone(taskId: string): Promise<void> {
+    const doneSet: string[] = await this.loadFollowUpDoneIds()
+    const next: string[] = doneSet.filter((id: string) => id !== taskId)
+    await putString(FOLLOWUP_DONE_KEY, JSON.stringify(next))
+  }
+
+  private async loadFollowUpDoneIds(): Promise<string[]> {
+    const json: string = await getString(FOLLOWUP_DONE_KEY, '[]')
+    try {
+      return JSON.parse(json) as string[]
+    } catch (e) {
+      return []
+    }
+  }
+
+  private mapReportRisk(level: string): RiskLevel {
+    if (level === '极高风险') {
+      return RiskLevel.CRITICAL
+    }
+    if (level === '高风险') {
+      return RiskLevel.HIGH
+    }
+    if (level === '中风险') {
+      return RiskLevel.MEDIUM
+    }
+    return RiskLevel.LOW
+  }
+
+  /**
+   * 按风险等级给随访时限：极高 1 天、高 2 天、中 5 天
+   */
+  private calcFollowUpDeadline(submitTime: number, level: RiskLevel): string {
+    let days: number = 5
+    if (level === RiskLevel.CRITICAL) {
+      days = 1
+    } else if (level === RiskLevel.HIGH) {
+      days = 2
+    }
+    const due: Date = new Date(submitTime + days * 24 * 60 * 60 * 1000)
+    const m: string = (due.getMonth() + 1).toString().padStart(2, '0')
+    const d: string = due.getDate().toString().padStart(2, '0')
+    return due.getFullYear() + '-' + m + '-' + d
+  }
+
+  /* ==================== S6 心理活动 ==================== */
+  /**
+   * 活动数据直接读学生端报名用的同一张表（MentalActivity / MentalHealth.db）。
+   * 学生在活动页报名/取消，currentQuota 实时变化，学校端这里看到的就是真实报名情况。
+   * 满意度来自学生端提交的评分（ActivityFeedbackStore），学校端只聚合展示，不参与打分。
+   */
+  async fetchActivities(context: common.Context): Promise<Activity[]> {
+    const list: MentalActivity[] = await ActivityDBHelper.queryAll(context)
+    const feedback: Record<string, ActivityFeedback> = await ActivityFeedbackStore.loadAll()
+    const statusMap: Record<string, number> = await this.loadActivityStatus()
+
+    return list.map((m: MentalActivity): Activity => {
+      const a: Activity = new Activity()
+      a.activityId = 'ACT-' + m.id.toString()
+      a.title = m.title
+      a.type = m.type
+      a.description = '面向「' + m.targetState + '」状态学生 · 地点：' + m.location
+      // time 列以 "开始 ~ 结束" 存储时间段；旧数据为单个时间点时起止相同
+      const range: TimeRange = this.parseTimeRange(m.time)
+      a.startDate = range.startText
+      a.endDate = range.endText
+      a.organizer = '校级心理中心'
+      a.participants = m.currentQuota                 // 真实报名人数
+      a.status = this.resolveActivityStatus(a.activityId, m, statusMap, range)
+      a.satisfaction = ActivityFeedbackStore.getAverage(feedback, a.activityId)  // 学生评分聚合
+      return a
+    })
+  }
+
+  /**
+   * 活动状态按时间段自动推导：
+   *  - 当前时间在时间段内 → 进行中
+   *  - 当前时间在时间段之后 → 已完成
+   *  - 当前时间在时间段之前 → 沿用学校端设定的原有状态（草稿/已批准），未设过则按报名情况推导
+   * 这样「已批准」在活动开始前仍可被编辑修改，时间到了再自动流转。
+   */
+  private resolveActivityStatus(activityId: string, m: MentalActivity, statusMap: Record<string, number>, range: TimeRange): ActivityStatus {
+    const now: number = new Date().getTime()
+    if (range.start > 0 && range.end > 0) {
+      if (now >= range.start && now <= range.end) {
+        return ActivityStatus.IN_PROGRESS
+      }
+      if (now > range.end) {
+        return ActivityStatus.COMPLETED
+      }
+    }
+    // 活动尚未开始：以学校端手动设定的状态为准
+    const override: number | undefined = statusMap[activityId]
+    if (override !== undefined) {
+      return override as ActivityStatus
+    }
+    if (m.currentQuota > 0) {
+      return ActivityStatus.APPROVED
+    }
+    return ActivityStatus.DRAFT
+  }
+
+  // 解析 "YYYY-MM-DD HH:mm ~ YYYY-MM-DD HH:mm" 形式的时间段
+  private parseTimeRange(time: string): TimeRange {
+    const sep: number = time.indexOf('~')
+    if (sep >= 0) {
+      const startText: string = time.substring(0, sep).trim()
+      const endText: string = time.substring(sep + 1).trim()
+      return {
+        start: this.parseDateTime(startText),
+        end: this.parseDateTime(endText),
+        startText: startText,
+        endText: endText
+      }
+    }
+    const t: number = this.parseDateTime(time)
+    return { start: t, end: t, startText: time.trim(), endText: time.trim() }
+  }
+
+  // 解析 "YYYY-MM-DD HH:mm" 为时间戳，失败返回 0
+  private parseDateTime(s: string): number {
+    const str: string = s.trim()
+    if (str.length === 0) {
+      return 0
+    }
+    const parts: string[] = str.split(' ')
+    const dateParts: string[] = parts[0].split('-')
+    if (dateParts.length < 3) {
+      return 0
+    }
+    const y: number = Number(dateParts[0])
+    const mo: number = Number(dateParts[1])
+    const d: number = Number(dateParts[2])
+    let hh: number = 0
+    let mm: number = 0
+    if (parts.length >= 2) {
+      const timeParts: string[] = parts[1].split(':')
+      hh = Number(timeParts[0])
+      if (timeParts.length >= 2) {
+        mm = Number(timeParts[1])
+      }
+    }
+    if (isNaN(y) || isNaN(mo) || isNaN(d)) {
+      return 0
+    }
+    return new Date(y, mo - 1, d, hh, mm, 0).getTime()
+  }
+
+  /**
+   * 学校端：编辑活动基础信息，写回学生端报名用的同一张表
+   */
+  async updateActivity(activityId: string, fields: ActivityEditFields, context: common.Context): Promise<boolean> {
+    const id: number = Number(activityId.replace('ACT-', ''))
+    return await ActivityDBHelper.updateActivity(context, id, fields)
+  }
+
+  /**
+   * 学校端：设置活动审批状态（批准/进行中/完成/退回草稿），持久化为学校端覆盖值
+   */
+  async setActivityStatus(activityId: string, status: ActivityStatus): Promise<void> {
+    const statusMap: Record<string, number> = await this.loadActivityStatus()
+    statusMap[activityId] = status
+    await putString(ACTIVITY_STATUS_KEY, JSON.stringify(statusMap))
+  }
+
+  private async loadActivityStatus(): Promise<Record<string, number>> {
+    const json: string = await getString(ACTIVITY_STATUS_KEY, '{}')
+    try {
+      return JSON.parse(json) as Record<string, number>
+    } catch (e) {
+      return {}
+    }
+  }
+
+  async fetchEfficiencyReport(activityId: string, context: common.Context): Promise<EfficiencyReport> {
     const report: EfficiencyReport = new EfficiencyReport()
     report.activityId = activityId
-    report.totalParticipants = 28
-    report.avgSatisfaction = 4.5
-    report.completionRate = 0.92
-    report.recommendationRate = 0.88
-    report.peakIndex = 85
-    report.createdAt = '2025-01-15'
+    report.createdAt = ''
+
+    const id: number = Number(activityId.replace('ACT-', ''))
+    const list: MentalActivity[] = await ActivityDBHelper.queryAll(context)
+    let target: MentalActivity | undefined = undefined
+    for (let i: number = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        target = list[i]
+        break
+      }
+    }
+    if (target === undefined) {
+      return report
+    }
+
+    const feedback: Record<string, ActivityFeedback> = await ActivityFeedbackStore.loadAll()
+    const avg: number = ActivityFeedbackStore.getAverage(feedback, activityId)
+
+    report.totalParticipants = target.currentQuota
+    // 完成率 = 实际报名 / 名额上限（真实报名热度）
+    report.completionRate = target.maxQuota > 0 ? target.currentQuota / target.maxQuota : 0
+    report.avgSatisfaction = avg                               // 学生评分平均
+    report.recommendationRate = avg > 0 ? avg / 5 : 0          // 推荐率 = 平均分 / 满分
+    report.peakIndex = Math.round(report.completionRate * 100)
     return report
   }
 
   /* ==================== S7 首页数据总览 ==================== */
-  async fetchDashboardSummary(): Promise<DashboardSummary> {
+  /**
+   * 首页总览是各端真实数据的聚合：
+   *  - 在册学生数  ← students 表（注册写入）
+   *  - 风险分布    ← reports 表（学生半月报 AI 评级）
+   *  - 今日预约    ← BookingService（学生预约咨询）
+   *  - 待跟进      ← S5 随访任务中未完成数
+   *  - 待处理工单/活跃热线 ← S2/S1（成员A的接口，接真实数据后自动联动）
+   */
+  async fetchDashboardSummary(context: common.Context): Promise<DashboardSummary> {
     const summary: DashboardSummary = new DashboardSummary()
-    summary.activeCalls = 4
-    summary.pendingOrders = 6
-    summary.todayAppointments = 5
-    summary.uncompletedFollowUps = 6
-    summary.totalStudents = 5200
-    summary.riskDistribution = [4100, 720, 280, 100]
+    const db: DatabaseHelper = DatabaseHelper.getInstance()
+
+    // 1) 在册学生数
+    try {
+      summary.totalStudents = await db.getStudentCount()
+    } catch (e) {
+      summary.totalStudents = 0
+    }
+
+    // 2) 风险分布（低/中/高/极高）
+    const dist: number[] = [0, 0, 0, 0]
+    try {
+      const reports: ReportData[] = await db.getAllReports()
+      reports.forEach((r: ReportData) => {
+        const level: RiskLevel = this.mapReportRisk(r.riskLevel)
+        dist[level] = dist[level] + 1
+      })
+    } catch (e) {
+      // 保持全 0
+    }
+    summary.riskDistribution = dist
+
+    // 3) 今日预约数
+    try {
+      const bookingSvc: BookingService = BookingService.getInstance()
+      await bookingSvc.init(context)
+      const bookings: BookingDTO[] = await bookingSvc.getBookings()
+      const today: Date = new Date()
+      summary.todayAppointments = bookings.filter((b: BookingDTO) =>
+        b.date.getFullYear() === today.getFullYear() &&
+        b.date.getMonth() === today.getMonth() &&
+        b.date.getDate() === today.getDate()
+      ).length
+    } catch (e) {
+      summary.todayAppointments = 0
+    }
+
+    // 4) 待跟进 = 未完成的随访任务数
+    try {
+      const tasks: FollowUpTask[] = await this.fetchFollowUpTasks()
+      summary.uncompletedFollowUps = tasks.filter((t: FollowUpTask) => !t.completed).length
+    } catch (e) {
+      summary.uncompletedFollowUps = 0
+    }
+
+    // 5) 待处理工单 / 活跃热线（成员A模块，调其接口聚合）
+    try {
+      const orders: WorkOrder[] = await this.fetchWorkOrders()
+      summary.pendingOrders = orders.filter((o: WorkOrder) => o.status === WorkOrderStatus.PENDING).length
+    } catch (e) {
+      summary.pendingOrders = 0
+    }
+    try {
+      const calls: HotlineCall[] = await this.fetchActiveCalls()
+      summary.activeCalls = calls.filter((c: HotlineCall) => c.status === CallStatus.ONGOING).length
+    } catch (e) {
+      summary.activeCalls = 0
+    }
+
     return summary
   }
 }

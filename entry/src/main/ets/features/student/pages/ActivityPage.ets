@@ -2,6 +2,7 @@ import { MentalActivity } from '../model/Activity';
 import { ActivityDBHelper } from '../../../common/utils/ActivityDBHelper';
 import { RiskAlgorithm } from '../../../common/utils/RiskAlgorithm'; // 引入半月报算法
 import { promptAction } from '@kit.ArkUI';
+import { ActivityFeedbackStore } from '../../../common/utils/ActivityFeedbackStore';
 
 @Component
 export struct ActivityPage {
@@ -13,6 +14,11 @@ export struct ActivityPage {
   @State allActivities: Array<MentalActivity> = [];
   @State isPageLoading: boolean = true;
   @State enrolledIds: Array<number> = [];
+  // 评价弹窗状态
+  @State showRatingSheet: boolean = false;
+  @State ratingActivityId: number = 0;
+  @State ratingActivityTitle: string = '';
+  @State ratingScore: number = 5;
 
   // 🌟 核心修复：把漏掉的监听回调方法补在这里！
   onTabActive() {
@@ -128,8 +134,24 @@ export struct ActivityPage {
     }
   }
 
+  // 打开评价弹窗（仅对已报名活动开放）
+  openRating(activity: MentalActivity) {
+    this.ratingActivityId = activity.id;
+    this.ratingActivityTitle = activity.title;
+    this.ratingScore = 5;
+    this.showRatingSheet = true;
+  }
+
+  // 提交评分 → 写入与学校端共享的反馈存储
+  async submitRating() {
+    await ActivityFeedbackStore.submit('ACT-' + this.ratingActivityId.toString(), this.ratingScore);
+    this.showRatingSheet = false;
+    promptAction.showToast({ message: '感谢你的评价！' });
+  }
+
   build() {
-    Column() {
+    Stack() {
+      Column() {
       // 1. 顶栏搜索过滤区
       Row() {
         Search({ value: this.searchKeyword, placeholder: '搜索感兴趣的疗愈活动...' })
@@ -199,6 +221,13 @@ export struct ActivityPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#FFFFFF')
+
+      if (this.showRatingSheet) {
+        this.RatingSheet()
+      }
+    }
+    .width('100%')
+    .height('100%')
   }
 
   // 抽离的自适应卡片组件
@@ -246,35 +275,110 @@ export struct ActivityPage {
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
-      // 动态报名按钮
-      Button(
-        this.enrolledIds.includes(activity.id) ? '取消报名' : // 已报名时，按钮变成取消入口
-          (activity.currentQuota >= activity.maxQuota ? '已满员' : '即刻加入')
-      )
-        .fontSize(12)
-        .fontWeight(FontWeight.Medium)
-        .backgroundColor(
-          this.enrolledIds.includes(activity.id) ? '#FF4D4F' :  // 已报名转为红色警告色，提示可以取消
-            (activity.currentQuota >= activity.maxQuota ? '#E5E5E5' : '#007DFF')
+      // 动态报名按钮 + 评价入口
+      Column({ space: 6 }) {
+        Button(
+          this.enrolledIds.includes(activity.id) ? '取消报名' : // 已报名时，按钮变成取消入口
+            (activity.currentQuota >= activity.maxQuota ? '已满员' : '即刻加入')
         )
-        .fontColor('#FFFFFF')
-        // 如果是已报名状态，必须允许其再次点击（即 enabled 设为 true）！
-        .enabled(activity.currentQuota < activity.maxQuota || this.enrolledIds.includes(activity.id))
-        .height(32)
-        .borderRadius(16)
-        .onClick(() => {
-          // 路由分流
-          if (this.enrolledIds.includes(activity.id)) {
-            this.handleCancelEnroll(activity); // 触发取消
-          } else {
-            this.handleEnroll(activity); // 触发报名
-          }
-        })
+          .fontSize(12)
+          .fontWeight(FontWeight.Medium)
+          .backgroundColor(
+            this.enrolledIds.includes(activity.id) ? '#FF4D4F' :  // 已报名转为红色警告色，提示可以取消
+              (activity.currentQuota >= activity.maxQuota ? '#E5E5E5' : '#007DFF')
+          )
+          .fontColor('#FFFFFF')
+          // 如果是已报名状态，必须允许其再次点击（即 enabled 设为 true）！
+          .enabled(activity.currentQuota < activity.maxQuota || this.enrolledIds.includes(activity.id))
+          .height(32)
+          .borderRadius(16)
+          .onClick(() => {
+            // 路由分流
+            if (this.enrolledIds.includes(activity.id)) {
+              this.handleCancelEnroll(activity); // 触发取消
+            } else {
+              this.handleEnroll(activity); // 触发报名
+            }
+          })
+
+        // 仅对已报名的活动开放「评价」，评分写入与学校端共享的反馈存储
+        if (this.enrolledIds.includes(activity.id)) {
+          Button('评价')
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .backgroundColor('#FFF7E6')
+            .fontColor('#FF9800')
+            .height(32)
+            .borderRadius(16)
+            .onClick(() => { this.openRating(activity) })
+        }
+      }
     }
     .width('100%')
     .padding(16)
     .backgroundColor('#F7F8FA')
     .borderRadius(16)
     .margin({ bottom: 4 })
+  }
+
+  // 学生评价弹窗（1-5 星）
+  @Builder RatingSheet() {
+    Column() {
+      Column()
+        .width('100%')
+        .layoutWeight(1)
+        .onClick(() => { this.showRatingSheet = false })
+
+      Column() {
+        Row() {
+          Text('活动评价')
+            .fontSize(18)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#111111')
+          Blank()
+          Text('✕')
+            .fontSize(18)
+            .fontColor('#999999')
+            .onClick(() => { this.showRatingSheet = false })
+        }
+        .width('100%')
+        .margin({ bottom: 8 })
+
+        Text(this.ratingActivityTitle)
+          .fontSize(13)
+          .fontColor('#888888')
+          .alignSelf(ItemAlign.Start)
+          .margin({ bottom: 20 })
+
+        Row() {
+          ForEach([1, 2, 3, 4, 5], (star: number) => {
+            Text(star <= this.ratingScore ? '★' : '☆')
+              .fontSize(36)
+              .fontColor('#FF9800')
+              .margin({ right: 8 })
+              .onClick(() => { this.ratingScore = star })
+          })
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Center)
+        .margin({ bottom: 24 })
+
+        Button('提交评价')
+          .fontSize(15)
+          .fontColor('#FFFFFF')
+          .backgroundColor('#007DFF')
+          .borderRadius(10)
+          .height(46)
+          .width('100%')
+          .onClick(() => { this.submitRating() })
+      }
+      .width('100%')
+      .padding(24)
+      .backgroundColor('#FFFFFF')
+      .borderRadius({ topLeft: 16, topRight: 16 })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('rgba(0, 0, 0, 0.4)')
   }
 }

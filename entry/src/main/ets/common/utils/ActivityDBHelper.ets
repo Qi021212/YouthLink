@@ -3,6 +3,16 @@ import { common } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MentalActivity } from '../../features/student/model/Activity'; // 请确保有这个基础接口
 
+// 学校端可编辑的活动字段（全部可选，只更新传入的字段）
+export interface ActivityEditFields {
+  title?: string;
+  type?: string;
+  targetState?: string;
+  time?: string;
+  location?: string;
+  maxQuota?: number;
+}
+
 export class ActivityDBHelper {
   private static store: relationalStore.RdbStore | null = null;
   private static readonly STORE_CONFIG: relationalStore.StoreConfig = {
@@ -169,6 +179,39 @@ export class ActivityDBHelper {
     updatePredicates.equalTo('id', id);
     let affectedRows = await store.update(valueBucket, updatePredicates);
 
+    return affectedRows > 0;
+  }
+
+  /**
+   * 🌟 学校端：编辑活动基础信息（标题/类型/针对状态/时间/地点/名额上限）。
+   * 写回的是学生端报名用的同一张表，编辑后学生端看到的活动信息同步更新。
+   */
+  static async updateActivity(context: common.Context, id: number, fields: ActivityEditFields): Promise<boolean> {
+    const store = await ActivityDBHelper.getStore(context);
+
+    const valueBucket: relationalStore.ValuesBucket = {};
+    if (fields.title !== undefined) {
+      valueBucket['title'] = fields.title;
+    }
+    if (fields.type !== undefined) {
+      valueBucket['type'] = fields.type;
+    }
+    if (fields.targetState !== undefined) {
+      valueBucket['targetState'] = fields.targetState;
+    }
+    if (fields.time !== undefined) {
+      valueBucket['time'] = fields.time;
+    }
+    if (fields.location !== undefined) {
+      valueBucket['location'] = fields.location;
+    }
+    if (fields.maxQuota !== undefined) {
+      valueBucket['maxQuota'] = fields.maxQuota;
+    }
+
+    let updatePredicates = new relationalStore.RdbPredicates('MentalActivity');
+    updatePredicates.equalTo('id', id);
+    let affectedRows = await store.update(valueBucket, updatePredicates);
     return affectedRows > 0;
   }
 

@@ -5,6 +5,8 @@ import { DashboardSummary } from '../model/SchoolModels'
 import { SchoolService } from '../service/SchoolService'
 import { AuthManager } from '../../../core/auth/AuthManager'
 import { UserInfoJson } from '../../../common/model/UserInfo'
+import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
+import { common } from '@kit.AbilityKit'
 
 class ModuleEntry {
   icon: string = ''
@@ -65,6 +67,11 @@ struct SchoolHomePage {
     this.loadSummary()
   }
 
+  // 从详情/子页面返回时刷新总览，保证跨端数据变化能及时反映
+  onPageShow(): void {
+    this.loadSummary()
+  }
+
   async loadUserInfo(): Promise<void> {
     const authManager = AuthManager.getInstance()
     const json = await authManager.getUserInfoJson()
@@ -82,7 +89,10 @@ struct SchoolHomePage {
 
   async loadSummary(): Promise<void> {
     try {
-      this.summary = await this.service.fetchDashboardSummary()
+      const ctx = getContext(this) as common.UIAbilityContext
+      // 读取 reports / students 表前确保数据库已初始化（与辅导员端一致）
+      await DatabaseHelper.getInstance().ensureInit(ctx)
+      this.summary = await this.service.fetchDashboardSummary(ctx)
     } catch (e) {
       this.summary = new DashboardSummary()
     } finally {
