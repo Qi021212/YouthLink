@@ -221,12 +221,12 @@ struct WorkOrderDetailPage {
                       .width(12)
                       .height(12)
                       .borderRadius(6)
-                      .backgroundColor(index === 0 ? Colors.PRIMARY : '#D1D5DB')
+                      .backgroundColor(this.getActionColor(node.action))
                     if (index < this.timeline.length - 1) {
                       Column()
                         .width(2)
                         .height(60)
-                        .backgroundColor('#E5E7EB')
+                        .backgroundColor(this.getActionColor(node.action) + '80')
                     }
                   }
                   .alignItems(HorizontalAlign.Center)

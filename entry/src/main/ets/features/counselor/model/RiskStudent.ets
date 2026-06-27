@@ -11,6 +11,8 @@ export interface DormHeatData {
   dormName: string
   riskLevel: number
   riskStudentIds: string[]
+  gender: 'Male' | 'Female'
+  beds: number[]
 }
 
 // features/counselor/model/RiskStudent.ets

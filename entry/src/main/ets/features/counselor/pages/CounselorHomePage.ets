@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // 修改后的 CounselorHomePage.ets（去掉旧台账功能）
 // ============================================================
 
@@ -57,10 +57,10 @@ struct CounselorHomePage {
   @State todayWarningCount: number = 3
   @State pendingCount: number = 5
   @State resolvedCount: number = 12
-  @State activeClass: string = '软件工程 2301班'
+  @State activeClass: string = '计算机2401'
   @State studentCount: number = 312
   @State monthlyFollowUp: number = 24
-  @State managedClasses: string[] = ['软件工程2301班', '软件工程2302班', '网络安全2301班', '计科2301班', '计科2302班', '物联网2301班', '大数据2301班', '嵌入式2301班']
+  @State managedClasses: string[] = ['计算机2401', '计算机2402', '软件2401', '软件2402', '网络2401', '网络2402']
 
   private service: CounselorService = new CounselorService()
 
@@ -240,7 +240,7 @@ struct CounselorHomePage {
               .fontWeight(FontWeight.Bold)
               .fontColor(Colors.TEXT_ON_PRIMARY)
 
-            Select([{ value: '软件工程 2301班' }, { value: '软件工程 2302班' }, { value: '网络安全 2301班' }])
+            Select(this.managedClasses.map((cls): SelectOption => ({ value: cls } as SelectOption)))
               .selected(0)
               .value('切换班级')
               .font({ size: 12 })
@@ -397,6 +397,8 @@ struct CounselorHomePage {
           if (this.verifyOperationPermission(item.label)) {
             if (item.label === '联系台账') {
               this.navigateToFamilyCoop()
+            } else if (item.label === '班级热力图') {
+              router.pushUrl({ url: item.route, params: { activeClassName: this.activeClass } })
             } else {
               router.pushUrl({ url: item.route })
             }
@@ -704,7 +706,11 @@ struct CounselorHomePage {
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
-      this.currentTab = index
+      if (index === 1) {
+        router.pushUrl({ url: RouterPath.WARNING_TIMELINE })
+      } else {
+        this.currentTab = index
+      }
     })
   }
 }

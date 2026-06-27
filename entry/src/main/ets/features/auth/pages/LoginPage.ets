@@ -124,9 +124,9 @@ struct LoginPage {
 
       Column() {
         Row() {
-          Image($r('app.media.startIcon'))
-            .width(20)
-            .height(20)
+          SymbolGlyph($r('sys.symbol.person'))
+            .fontSize(20)
+            .fontColor([Colors.PRIMARY])
             .margin({ right: 12 })
 
           TextInput({ placeholder: '请输入学号/工号', text: this.account })
@@ -147,9 +147,9 @@ struct LoginPage {
         .margin({ bottom: 16 })
 
         Row() {
-          Image($r('app.media.startIcon'))
-            .width(20)
-            .height(20)
+          SymbolGlyph($r('sys.symbol.lock'))
+            .fontSize(20)
+            .fontColor([Colors.PRIMARY])
             .margin({ right: 12 })
 
           TextInput({ placeholder: '请输入密码', text: this.password })
