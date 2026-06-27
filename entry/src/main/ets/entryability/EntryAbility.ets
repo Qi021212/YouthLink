@@ -24,7 +24,7 @@ export default class EntryAbility extends UIAbility {
     await initStorage(this.context);
     console.info('[Auth] Storage initialized');
 
-    windowStage.loadContent('features/counselor/pages/CounselorHomePage', (err) => {
+    windowStage.loadContent('features/school/pages/SchoolHomePage', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
         return;
