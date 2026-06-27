@@ -17,6 +17,7 @@ export class RouterPath {
   static readonly COUNSELOR_HOME = 'features/counselor/pages/CounselorHomePage'
   static readonly HEATMAP = 'features/counselor/pages/HeatmapPage'
   static readonly WARNING_TIMELINE = 'features/counselor/pages/WarningTimelinePage'
+  static readonly FAMILY_COOP = 'features/counselor/pages/Page/FamilyCoopPage'
   static readonly SCHOOL_HOME = 'features/school/pages/SchoolHomePage'
   static readonly HOTLINE = 'features/school/pages/HotlinePage'
   static readonly WORK_ORDER_LIST = 'features/school/pages/WorkOrderListPage'

@@ -19,6 +19,7 @@
     "features/counselor/pages/WarningTimelinePage",
     "features/counselor/pages/CaseListPage",
     "features/counselor/pages/RiskListPage",
+    "features/counselor/pages/FamilyCoopPage",
     "features/school/pages/SchoolHomePage",
     "features/school/pages/HotlinePage",
     "features/school/pages/WorkOrderListPage",

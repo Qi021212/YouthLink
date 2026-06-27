@@ -1,17 +1,23 @@
-﻿import { router , promptAction} from '@kit.ArkUI'
+﻿// ============================================================
+// 修改后的 CounselorHomePage.ets（去掉旧台账功能）
+// ============================================================
+
+import { router, promptAction } from '@kit.ArkUI'
 import { Colors } from '../../../common/constants/Colors'
 import { RouterPath } from '../../../common/constants/RouterPath'
 import { AuthManager } from '../../../core/auth/AuthManager'
 import { DatabaseHelper } from '../../../common/utils/DatabaseHelper'
 import { common } from '@kit.AbilityKit'
-import { UserInfoJson,RoleType } from '../../../common/model/UserInfo'
+import { UserInfoJson, RoleType } from '../../../common/model/UserInfo'
 import { RiskBadge } from '../../../common/components/RiskBadge'
 import { WarningEvent } from '../model/WarningEvent'
 import { CounselorService } from '../service/CounselorService'
 import { CounselorStorage } from '../service/CounselorStorage'
-import { CaseData } from '../model/CaseData'
-import { NewCaseDialog } from './CaseFormDialog'
 
+// ============================================================
+// 导入台账页面
+// ============================================================
+import { FamilyCoopPage } from './FamilyCoopPage'
 
 class QuickAction {
   label: string
@@ -46,33 +52,24 @@ class AlertSummaryItem {
 struct CounselorHomePage {
   @State currentTab: number = 0
   @State warningEvents: WarningEvent[] = []
-  @State caseList: CaseData[] = []
   @State userName: string = ''
   @State userAvatarChar: string = ''
   @State todayWarningCount: number = 3
   @State pendingCount: number = 5
   @State resolvedCount: number = 12
   @State activeClass: string = '软件工程 2301班'
-  @State notifyFrequency: string = '智能实时推送'
-  @State currentPasswordMask: string = '******'
   @State studentCount: number = 312
   @State monthlyFollowUp: number = 24
   @State managedClasses: string[] = ['软件工程2301班', '软件工程2302班', '网络安全2301班', '计科2301班', '计科2302班', '物联网2301班', '大数据2301班', '嵌入式2301班']
-  private service: CounselorService = new CounselorService()
 
-  // 绑定新建个案弹窗控制器
-  private dialogController: CustomDialogController | null = new CustomDialogController({
-    builder: NewCaseDialog(),
-    alignment: DialogAlignment.Bottom,
-    customStyle: false
-  })
+  private service: CounselorService = new CounselorService()
 
   private quickActions: QuickAction[] = [
     new QuickAction('班级热力图', '可视化监测班级心理态势', '🗺️', '#4A90D9', RouterPath.HEATMAP),
     new QuickAction('预警追踪', 'AI前哨实时预警跟进', '⚡', '#F97316', RouterPath.WARNING_TIMELINE),
     new QuickAction('风险清单', '重点关注学生明细', '📋', '#EF4444', 'features/counselor/pages/RiskListPage'),
     new QuickAction('半月报预审', '智能评估半月报告', '📊', '#8B5CF6', 'features/counselor/pages/ReportAuditPage'),
-    new QuickAction('联系台账', '家校协作沟通记录', '📒', '#10B981', 'features/counselor/pages/CaseListPage'),
+    new QuickAction('联系台账', '家校协作沟通记录', '📒', '#10B981', 'features/counselor/pages/FamilyCoopPage'),
     new QuickAction('咨询预约', '心理辅导预约管理', '📅', '#F59E0B', 'features/counselor/pages/ConsultManagePage')
   ]
 
@@ -81,42 +78,25 @@ struct CounselorHomePage {
     new AlertSummaryItem('预警', '4', '#F97316'),
     new AlertSummaryItem('关注', '7', '#FBBF24')
   ]
+
   aboutToAppear(): void {
     this.loadUserInfo()
     this.loadWarnings()
-    this.loadPersistedPreferences() // 首屏静默加载持久化偏好
-    this.loadCases() // 首屏静默加载联系台账数据
+    this.loadPersistedPreferences()
   }
 
-  // 从本地关系型数据库拉取台账列表
-  async loadCases(): Promise<void> {
-    try {
-      const db = DatabaseHelper.getInstance()
-      if (!db.isReady()) {
-        await db.ensureInit(getContext(this) as common.UIAbilityContext)
-      }
-      this.caseList = await db.getAllCases()
-    } catch (err) {
-      console.error('加载台账失败:' + JSON.stringify(err))
-    }
-  }
-
-  // 读取 Preferences 闪存快照
   async loadPersistedPreferences() {
     let ctx = getContext(this);
     this.activeClass = await CounselorStorage.getClass(ctx);
   }
 
-  /**
-   * 🌟 C7 高级能力：核心操作权限安全校验锁（防非辅导员角色非法篡改/跨越数据大盘）
-   */
   private verifyOperationPermission(actionName: string): boolean {
-    const currentRole: RoleType = RoleType.COUNSELOR; // 模拟当前身份
+    const currentRole: RoleType = RoleType.COUNSELOR;
     if (currentRole !== RoleType.COUNSELOR && currentRole !== RoleType.SCHOOL_ADMIN) {
       AlertDialog.show({
         title: '🔒 权限拦截',
         message: `您无权执行【${actionName}】。`,
-        confirm: { value: '关闭', action: () => {} }
+        confirm: { value: '关闭', action: () => { } }
       });
       return false;
     }
@@ -159,13 +139,12 @@ struct CounselorHomePage {
       if (!dbHelper.isReady()) {
         await dbHelper.ensureInit(getContext(this) as common.UIAbilityContext)
       }
-    } catch (err) {}
+    } catch (err) { }
     const data: WarningEvent[] = await this.service.fetchWarningEvents()
     this.warningEvents = data
     this.calculateDynamicMetrics(data)
   }
 
-  // 指标动态全量计算引擎
   private calculateDynamicMetrics(data: WarningEvent[]): void {
     if (!data || data.length === 0) return;
 
@@ -184,16 +163,23 @@ struct CounselorHomePage {
       }
     });
 
-    // 联动重写预警中心统计卡片
     this.alertSummary = [
       new AlertSummaryItem('高危', high.toString(), '#EF4444'),
       new AlertSummaryItem('预警', warning.toString(), '#F97316'),
       new AlertSummaryItem('关注', watch.toString(), '#FBBF24')
     ];
 
-    // 同步刷新工作台大盘数字
     this.todayWarningCount = high;
     this.pendingCount = warning;
+  }
+
+  // ============================================================
+  // 跳转到台账页面
+  // ============================================================
+  private navigateToFamilyCoop(): void {
+    if (this.verifyOperationPermission('查看联系台账')) {
+      router.pushUrl({ url: 'features/counselor/pages/FamilyCoopPage' })
+    }
   }
 
   build() {
@@ -204,8 +190,11 @@ struct CounselorHomePage {
         } else if (this.currentTab === 1) {
           this.buildAlertCenter()
         } else if (this.currentTab === 2) {
-          this.buildCaseLedgerTab()
-        }else {
+          // ============================================================
+          // 联系台账 Tab：直接嵌入 FamilyCoopPage 组件
+          // ============================================================
+          FamilyCoopPage()
+        } else {
           this.buildProfile()
         }
       }
@@ -218,14 +207,14 @@ struct CounselorHomePage {
     .backgroundColor(Colors.BACKGROUND)
   }
 
-  /* ============ 工作台 Tab ============ */
+  // ============================================================
+  // 工作台 Tab
+  // ============================================================
   @Builder
   buildWorkbench(): void {
     Column() {
-      // 蓝色 Header
       this.buildGreeting()
 
-      // 可滚动内容
       Scroll() {
         Column() {
           this.buildStatRow()
@@ -259,13 +248,10 @@ struct CounselorHomePage {
               .backgroundColor('rgba(255,255,255,0.15)')
               .margin({ left: 10 })
               .onSelect(async (idx: number, value: string) => {
-                // 挂钩操作拦截校验
                 if (!this.verifyOperationPermission('管理班级动态切换')) return;
-
                 let ctx = getContext(this);
                 this.activeClass = value;
-                // 实时写入 Preferences
-                await CounselorStorage.saveClass(ctx, value); // Preferences落盘
+                await CounselorStorage.saveClass(ctx, value);
                 promptAction.showToast({ message: `已切入 ${value} 数据核心` });
               })
           }
@@ -315,7 +301,6 @@ struct CounselorHomePage {
       .layoutWeight(1)
       .padding({ left: 4, right: 4 })
 
-      // 竖线分隔
       Column()
         .width(1)
         .height(40)
@@ -334,7 +319,6 @@ struct CounselorHomePage {
       .layoutWeight(1)
       .padding({ left: 4, right: 4 })
 
-      // 竖线分隔
       Column()
         .width(1)
         .height(40)
@@ -410,9 +394,12 @@ struct CounselorHomePage {
         .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
         .margin({ bottom: 12 })
         .onClick(() => {
-          // 🌟 拦截安全防线：只有符合辅导员权限，才能通过路由下钻
           if (this.verifyOperationPermission(item.label)) {
-            router.pushUrl({ url: item.route })
+            if (item.label === '联系台账') {
+              this.navigateToFamilyCoop()
+            } else {
+              router.pushUrl({ url: item.route })
+            }
           }
         })
       })
@@ -421,7 +408,9 @@ struct CounselorHomePage {
     .padding({ left: 24, right: 24 })
   }
 
-  /* ============ 预警中心 Tab ============ */
+  // ============================================================
+  // 预警中心 Tab
+  // ============================================================
   @Builder
   buildAlertCenter(): void {
     Scroll() {
@@ -433,7 +422,6 @@ struct CounselorHomePage {
           .alignSelf(ItemAlign.Start)
           .padding({ top: 16, left: 24, bottom: 14 })
 
-        // 风险统计卡片
         Row() {
           ForEach(this.alertSummary, (item: AlertSummaryItem) => {
             Column() {
@@ -535,113 +523,13 @@ struct CounselorHomePage {
     .margin({ bottom: 12 })
   }
 
-  /* ============ 联系台账原生 Tab 页面渲染 ============ */
-  @Builder
-  buildCaseLedgerTab(): void {
-    Column() {
-      // 头部标题栏
-      Row() {
-        Text('家校协同联系台账')
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(Colors.TEXT_PRIMARY)
-        Blank()
-        // 新建个案快捷圆形按钮
-        Button('＋ 新建个案')
-          .fontSize(13)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Colors.TEXT_ON_PRIMARY)
-          .backgroundColor(Colors.PRIMARY)
-          .height(32)
-          .borderRadius(8)
-          .onClick(() => {
-            if (this.verifyOperationPermission('新建联系台账个案')) {
-              this.dialogController?.open()
-            }
-          })
-      }
-      .width('100%')
-      .padding({ top: 16, left: 24, right: 24, bottom: 14 })
-
-      // 台账核心可滚动列表
-      Scroll() {
-        Column() {
-          ForEach(this.caseList, (item: CaseData) => {
-            Row() {
-              Column({ space: 6 }) {
-                Row() {
-                  Text(item.studentName)
-                    .fontSize(16)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(Colors.TEXT_PRIMARY)
-                  Blank()
-                  // 状态徽章判定
-                  Text(item.status)
-                    .fontSize(11)
-                    .fontColor(item.status === '已完成' ? '#10B981' : '#F59E0B')
-                    .backgroundColor(item.status === '已完成' ? '#E6F4EA' : '#FFF7ED')
-                    .padding({ left: 8, right: 8, top: 2, bottom: 2 })
-                    .borderRadius(6)
-                }
-                .width('100%')
-
-                Text(`联系家长：${item.parentPhone}`)
-                  .fontSize(13)
-                  .fontColor(Colors.TEXT_SECONDARY)
-
-                Row() {
-                  Text(`截止日期：${new Date(item.deadline).toLocaleDateString()}`)
-                    .fontSize(12)
-                    .fontColor(Colors.TEXT_HINT)
-                  Blank()
-                  Text('进入时间线 →')
-                    .fontSize(12)
-                    .fontColor(Colors.PRIMARY)
-                }
-                .width('100%')
-                .margin({ top: 4 })
-              }
-              .layoutWeight(1)
-            }
-            .width('90%')
-            .padding(16)
-            .backgroundColor(Colors.CARD_BG)
-            .borderRadius(14)
-            .shadow({ radius: 4, color: Colors.SHADOW, offsetY: 2 })
-            .margin({ bottom: 12 })
-            .onClick(() => {
-              // 点击条目下钻到对应的个案沟通记录时间线页
-              router.pushUrl({
-                url: 'features/counselor/pages/CaseDetailPage',
-                params: { caseId: item.id }
-              })
-            })
-          })
-
-          if (this.caseList.length === 0) {
-            Column() {
-              Text('📒').fontSize(40).margin({ bottom: 10 })
-              Text('暂无协同个案台账记录').fontSize(14).fontColor(Colors.TEXT_HINT)
-            }
-            .margin({ top: 80 })
-          }
-        }
-        .width('100%')
-        .padding({ bottom: 24 })
-      }
-      .scrollBar(BarState.Off)
-      .layoutWeight(1)
-    }
-    .width('100%')
-    .height('100%')
-  }
-
-  /* ============ 我的 Tab ============ */
+  // ============================================================
+  // 我的 Tab
+  // ============================================================
   @Builder
   buildProfile(): void {
     Scroll() {
       Column() {
-        // 个人信息卡片
         Column() {
           Stack({ alignContent: Alignment.Center }) {
             Circle({ width: 64, height: 64 })
@@ -661,7 +549,6 @@ struct CounselorHomePage {
             .fontColor(Colors.TEXT_SECONDARY)
             .margin({ top: 4 })
 
-          // 三列统计
           Row() {
             Column() {
               Text(this.managedClasses.length.toString()).fontSize(18).fontWeight(FontWeight.Bold).fontColor(Colors.TEXT_PRIMARY)
@@ -690,7 +577,6 @@ struct CounselorHomePage {
         .width('100%')
         .alignItems(HorizontalAlign.Center)
 
-        // 设置列表
         Text('设置')
           .fontSize(14)
           .fontWeight(FontWeight.Medium)
@@ -698,21 +584,18 @@ struct CounselorHomePage {
           .alignSelf(ItemAlign.Start)
           .padding({ left: 24, bottom: 10 })
 
-        // 1：密码修改与凭证核验真实实现
-        this.buildProfileItem('账号与安全','管理密码与登录方式', () => {
+        this.buildProfileItem('账号与安全', '管理密码与登录方式', () => {
           if (!this.verifyOperationPermission('修改密码')) return;
-          // 跳转到你已有的修改密码页面
           router.pushUrl({ url: 'features/auth/pages/ChangePasswordPage' });
         })
 
-        // 2：当前管辖班级联动回显
         this.buildProfileItem('数据范围', `当前管辖：${this.managedClasses.length}个班级`, () => {
           AlertDialog.show({
             title: '管辖班级清单',
             message: this.managedClasses.join('\n'),
             confirm: {
-              value: '关闭' ,
-              action:()=>{}
+              value: '关闭',
+              action: () => { }
             }
           });
         })
@@ -721,13 +604,13 @@ struct CounselorHomePage {
           AlertDialog.show({
             title: '关于青心链',
             message: '青心链心理预警系统 v1.0.0\n专为高校辅导员设计，提供班级心理态势感知与危机闭环管理。\n开发者：软件工程小组',
-            confirm: { value: '确定' ,
-              action:()=>{}
+            confirm: {
+              value: '确定',
+              action: () => { }
             }
           });
         })
 
-        // 退出登录
         Button('退出登录')
           .fontSize(15)
           .fontColor('#EF4444')
@@ -744,11 +627,11 @@ struct CounselorHomePage {
                 value: '退出',
                 action: async () => {
                   const authManager = AuthManager.getInstance()
-                  await authManager.logout() // 销毁基础凭证
+                  await authManager.logout()
                   router.replaceUrl({ url: RouterPath.LOGIN })
                 }
               },
-              cancel: () => {}
+              cancel: () => { }
             })
           })
       }
@@ -756,7 +639,6 @@ struct CounselorHomePage {
     .scrollBar(BarState.Off)
   }
 
-  // 🌟 黄金重构点：为队友的函数新增第三个可选参数 onClickAction
   @Builder
   buildProfileItem(title: string, subtitle: string, onClickAction?: () => void): void {
     Row() {
@@ -782,7 +664,6 @@ struct CounselorHomePage {
     .backgroundColor(Colors.CARD_BG)
     .borderRadius(12)
     .margin({ bottom: 8 })
-    // 🌟 在这里将点击动作与传进来的逻辑真正挂钩！
     .onClick(() => {
       if (onClickAction) {
         onClickAction();
@@ -790,7 +671,9 @@ struct CounselorHomePage {
     })
   }
 
-  /* ============ 底部导航栏 ============ */
+  // ============================================================
+  // 底部导航栏
+  // ============================================================
   @Builder
   buildBottomBar(): void {
     Row() {
@@ -822,9 +705,6 @@ struct CounselorHomePage {
     .alignItems(HorizontalAlign.Center)
     .onClick(() => {
       this.currentTab = index
-      if (index === 2) {
-        this.loadCases() // 点击台账Tab时刷新数据，确保增删改能立刻回显
-      }
     })
   }
 }
